@@ -1,0 +1,34 @@
+{
+  "model_path": "/ABSOLUTE/PATH/TO/YOUR/3B_MODEL.gguf",
+  "llama_server_bin": "/ABSOLUTE/PATH/TO/YOUR/llama-server",
+  "host": "127.0.0.1",
+  "port": 18080,
+  "topology_mode": "single",
+  "ctx_size": 4096,
+  "ctx_size_per_session": 4096,
+  "parallel": 1,
+  "concurrency": 1,
+  "threads": 8,
+  "threads_http": 2,
+  "batch": 512,
+  "ubatch": 512,
+  "n_predict": 128,
+  "temperature": 0.2,
+  "seed": 42,
+  "system_prompt": null,
+  "prompt": "Reply with one sentence confirming service readiness.",
+  "stop_tokens": [
+    "</s>",
+    "<|eot_id|>"
+  ],
+  "startup_delay_s": 0.0,
+  "bind_timeout_s": 180,
+  "ready_timeout_s": 120,
+  "extra_llama_server_args": [
+    "--no-warmup"
+  ],
+  "endpoint_mode": "/completion",
+  "verification_mode": "NON_EMPTY",
+  "expected_text": null,
+  "request_model": null
+}

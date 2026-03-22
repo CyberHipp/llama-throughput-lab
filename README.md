@@ -291,3 +291,157 @@ instances | parallel | batch   | ubatch  | concurrency | throughput_tps | total_
       2.0 |     16.0 | default | default |        32.0 |           73.9 |       4096.0 |     55.46 |    0.0
       2.0 |     32.0 | default | default |        32.0 |           73.6 |       4096.0 |     55.64 |    0.0
 ```
+
+## Deterministic Execution Core (SymbiOS-oriented)
+
+This fork now includes a non-interactive backend contract in `throughput_lab/execution_core.py`.
+
+- `RunConfig`: normalized typed config surface.
+- `run_with_receipt(...)`: executes a deterministic command and emits receipt/artifacts.
+- `scripts/run_core_job.py`: CLI adapter for automation/TUI/GUI.
+
+### Core run (no launcher)
+
+```bash
+python3 scripts/run_core_job.py --intent "3b-single-node-smoke" --output-dir artifacts/receipts
+```
+
+Optional explicit JSON contract input:
+
+```bash
+python3 scripts/run_core_job.py --config-json config/run_config.json --intent "smoke"
+```
+
+Local override layering for machine-specific paths/env:
+
+```bash
+python3 scripts/run_core_job.py \
+  --config-json configs/first_3b_single_smoke.json \
+  --config-override-json configs/local/first_3b_single_smoke.local.json \
+  --intent "3b-single-smoke" \
+  --dry-run
+```
+
+Receipt artifacts include stdout/stderr/exit-code paths plus normalized topology/config snapshots.
+
+## Development Commands
+
+```bash
+make check
+```
+
+### Dry-run plan packet (no execution)
+
+Use dry-run mode to emit an inspectable run plan packet without launching `llama-server`:
+
+```bash
+python3 scripts/run_core_job.py \
+  --config-json configs/first_3b_single_smoke.json \
+  --intent "3b-single-smoke" \
+  --dry-run \
+  --plan-out artifacts/receipts/first_3b_single_smoke.plan.json
+```
+
+Dry-run prints and/or writes:
+- resolved command
+- resolved endpoint path
+- resolved request payload
+- resolved topology
+- resolved artifact layout
+- verification target and placeholders for failure summary + next step
+
+### Single-node smoke execution (start/wait/request/stop)
+
+The backend now supports a canonical single-smoke lifecycle that treats `llama-server` as a long-running process:
+- launch
+- readiness probe
+- one deterministic request
+- artifact capture (request + response + stdout/stderr + exit code)
+- clean shutdown
+- CCR-grade smoke receipt
+
+```bash
+python3 scripts/run_core_job.py \
+  --config-json configs/first_3b_single_smoke.json \
+  --intent "3b-single-smoke" \
+  --single-smoke \
+  --output-dir artifacts/receipts
+```
+
+### Verification contract (single smoke)
+
+The smoke backend applies fail-closed verification in this order:
+1. preflight checks
+2. readiness checks
+3. endpoint-aware response parse
+4. semantic verification policy
+
+Supported verification modes:
+- `NON_EMPTY` (default)
+- `EXACT`
+- `CONTAINS`
+
+Config knobs:
+- `verification_mode`
+- `expected_text` (required for `EXACT` and `CONTAINS`)
+
+Endpoint contract notes:
+- First canonical 3B smoke profile uses native `/completion`.
+- OpenAI-compatible `/v1/chat/completions` and `/v1/completions` require `request_model`.
+
+Runtime env overlay notes:
+- Use `runtime_env` in profile JSON (or `LLAMA_RUNTIME_ENV=KEY=VALUE,...`) for non-secret runtime overlays.
+- Dry-run and receipts include `resolved_runtime_env`.
+- Overall smoke success uses controlled-shutdown classification (intentional stop), not naive raw exit code only.
+
+### Preflight-only machine-readable packet
+
+```bash
+python3 scripts/run_core_job.py \
+  --config-json configs/first_3b_single_smoke.json \
+  --intent "3b-single-smoke" \
+  --preflight-only
+```
+
+`--dry-run`, `--preflight-only`, and `--single-smoke` emit a stable top-level machine-readable envelope:
+`packet_version`, `mode`, `status`, `run_id`, `intent`, `tool_name`, `receipt_path`, `failure_summary`, `next_step`, `data`.
+For `--dry-run` and `--preflight-only`, `receipt_path` is `null` unless a receipt file is actually written.
+
+### Local profile overrides (portable base + ignored local binding)
+
+Use this two-file pattern for the first real 3B smoke lane:
+- committed portable base: `configs/first_3b_single_smoke.json`
+- machine-local override: `configs/local/*.json` (gitignored)
+
+CLI flags:
+- `--config-json <base.json>`
+- `--config-override-json <local.json>`
+
+Merge behavior is deterministic and fail-closed:
+- scalar fields in override replace base fields
+- arrays (`stop_tokens`, `extra_llama_server_args`) replace base arrays entirely
+- `runtime_env` is replaced by the override dictionary as a whole
+- unknown override keys are rejected with a hard error
+- invalid enum values (`topology_mode`, `endpoint_mode`, `verification_mode`) are rejected with a hard error
+
+Dry-run, preflight-only, and single-smoke all use the same merged config. Dry-run and preflight packets expose merged values in:
+- `config_snapshot`
+- `resolved_command`
+- `resolved_model_path`
+- `resolved_llama_server_path`
+- `resolved_runtime_env`
+- `resolved_request_payload`
+
+Example local override for a GPU node (`configs/local/first_3b_single_smoke.local.json`):
+
+```json
+{
+  "model_path": "/models/Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+  "llama_server_bin": "/opt/llama.cpp/build/bin/llama-server",
+  "runtime_env": {
+    "CUDA_VISIBLE_DEVICES": "0",
+    "OMP_NUM_THREADS": "8"
+  },
+  "port": 18081
+}
+```
