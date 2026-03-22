@@ -106,6 +106,24 @@ Controlled shutdown semantics:
 - Smoke intentionally stops a long-running server after one request.
 - Overall success depends on controlled-shutdown classification, not only `exit_code == 0`, to avoid false failures on signal-style termination codes.
 
+## Local profile override layer
+
+The first real 3B smoke lane needs portable committed defaults and machine-specific runtime binding without polluting shared config.
+
+Implementation:
+- Canonical base profile remains committed at `configs/first_3b_single_smoke.json`.
+- Optional machine-local override is passed via `--config-override-json` and is expected under `configs/local/*.json` (gitignored).
+- CLI performs deterministic merge before `RunConfig` materialization.
+
+Merge contract:
+- override scalars replace base scalars
+- override arrays replace base arrays entirely
+- override `runtime_env` replaces base `runtime_env` as a full dict
+- unknown override keys fail closed before merge
+- enum validation remains fail-closed through `RunConfig` construction
+
+This gives one clear seam for local node paths (`model_path`, `llama_server_bin`), runtime env, and optional port binding, while preserving stable packet/receipt envelopes.
+
 Canonical packet envelope:
 - `packet_version`
 - `mode`

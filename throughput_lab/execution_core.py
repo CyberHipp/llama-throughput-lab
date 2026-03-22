@@ -551,6 +551,13 @@ def preflight_packet(
     timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     checks = run_preflight_checks(config)
     ok = checks["result"] == "pass"
+    plan = build_run_plan(
+        config,
+        output_dir=output_dir,
+        intent=intent,
+        tool_name=tool_name,
+        run_id=run_id,
+    )
     envelope = _stable_envelope(
         mode="preflight-only",
         status="success" if ok else "failure",
@@ -559,7 +566,15 @@ def preflight_packet(
         intent=intent,
         tool_name=tool_name,
         receipt_path=None,
-        data={"preflight": checks, "resolved_runtime_env": dict(config.runtime_env)},
+        data={
+            "preflight": checks,
+            "config_snapshot": plan["config_snapshot"],
+            "resolved_command": plan["resolved_command"],
+            "resolved_model_path": plan["resolved_model_path"],
+            "resolved_llama_server_path": plan["resolved_llama_server_path"],
+            "resolved_runtime_env": plan["resolved_runtime_env"],
+            "resolved_request_payload": plan["resolved_request_payload"],
+        },
         failure_summary="none" if ok else "preflight checks failed",
         next_step="Run --single-smoke." if ok else "Fix preflight failures before smoke.",
     )

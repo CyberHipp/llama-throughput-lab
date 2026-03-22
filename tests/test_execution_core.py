@@ -452,6 +452,88 @@ class CliBehaviorTests(unittest.TestCase):
         self.assertEqual(parsed["status"], "failure")
         self.assertIn("timestamp_utc", parsed)
 
+    def test_config_override_replaces_scalars_sequences_and_runtime_env(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir) / "base.json"
+            override_path = Path(tmp_dir) / "override.json"
+            base = {
+                "model_path": "/base/model.gguf",
+                "llama_server_bin": "/base/llama-server",
+                "port": 18080,
+                "topology_mode": "single",
+                "endpoint_mode": "/completion",
+                "verification_mode": "NON_EMPTY",
+                "stop_tokens": ["</s>"],
+                "extra_llama_server_args": ["--no-warmup"],
+                "runtime_env": {"CUDA_VISIBLE_DEVICES": "0", "OMP_NUM_THREADS": "8"},
+                "prompt": "hello",
+            }
+            override = {
+                "model_path": "/override/model.gguf",
+                "port": 19090,
+                "stop_tokens": ["<|eot_id|>"],
+                "extra_llama_server_args": ["--flash-attn"],
+                "runtime_env": {"CUDA_VISIBLE_DEVICES": "1"},
+            }
+            base_path.write_text(json.dumps(base), encoding="utf-8")
+            override_path.write_text(json.dumps(override), encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/run_core_job.py",
+                    "--config-json",
+                    str(base_path),
+                    "--config-override-json",
+                    str(override_path),
+                    "--dry-run",
+                    "--intent",
+                    "override-test",
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                check=False,
+                capture_output=True,
+            )
+        self.assertEqual(proc.returncode, 0)
+        packet = json.loads(proc.stdout.decode("utf-8"))
+        plan = packet["data"]["plan"]
+        self.assertEqual(plan["resolved_model_path"], "/override/model.gguf")
+        self.assertEqual(plan["resolved_command"][3:5], ["--port", "19090"])
+        self.assertEqual(plan["resolved_request_payload"]["stop"], ["<|eot_id|>"])
+        self.assertEqual(plan["resolved_runtime_env"], {"CUDA_VISIBLE_DEVICES": "1"})
+        self.assertEqual(plan["config_snapshot"]["extra_llama_server_args"], ["--flash-attn"])
+
+    def test_config_override_unknown_key_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir) / "base.json"
+            override_path = Path(tmp_dir) / "override.json"
+            base = {
+                "model_path": "/base/model.gguf",
+                "llama_server_bin": "/base/llama-server",
+                "topology_mode": "single",
+                "endpoint_mode": "/completion",
+                "verification_mode": "NON_EMPTY",
+            }
+            override = {"not_a_real_field": 123}
+            base_path.write_text(json.dumps(base), encoding="utf-8")
+            override_path.write_text(json.dumps(override), encoding="utf-8")
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/run_core_job.py",
+                    "--config-json",
+                    str(base_path),
+                    "--config-override-json",
+                    str(override_path),
+                    "--dry-run",
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                check=False,
+                capture_output=True,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Unknown override key", proc.stderr.decode("utf-8"))
+
 
 class PreflightPacketTests(unittest.TestCase):
     def test_preflight_only_success_packet_shape(self):
@@ -467,6 +549,9 @@ class PreflightPacketTests(unittest.TestCase):
         self.assertEqual(packet["status"], "success")
         self.assertIn("data", packet)
         self.assertIsNone(packet["receipt_path"])
+        self.assertIn("config_snapshot", packet["data"])
+        self.assertIn("resolved_command", packet["data"])
+        self.assertIn("resolved_request_payload", packet["data"])
 
     def test_preflight_only_failure_packet_shape(self):
         cfg = RunConfig(model_path="/missing/model.gguf", llama_server_bin="/missing/llama-server")

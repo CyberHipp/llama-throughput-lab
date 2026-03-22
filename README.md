@@ -312,6 +312,16 @@ Optional explicit JSON contract input:
 python3 scripts/run_core_job.py --config-json config/run_config.json --intent "smoke"
 ```
 
+Local override layering for machine-specific paths/env:
+
+```bash
+python3 scripts/run_core_job.py \
+  --config-json configs/first_3b_single_smoke.json \
+  --config-override-json configs/local/first_3b_single_smoke.local.json \
+  --intent "3b-single-smoke" \
+  --dry-run
+```
+
 Receipt artifacts include stdout/stderr/exit-code paths plus normalized topology/config snapshots.
 
 ## Development Commands
@@ -396,3 +406,42 @@ python3 scripts/run_core_job.py \
 `--dry-run`, `--preflight-only`, and `--single-smoke` emit a stable top-level machine-readable envelope:
 `packet_version`, `mode`, `status`, `run_id`, `intent`, `tool_name`, `receipt_path`, `failure_summary`, `next_step`, `data`.
 For `--dry-run` and `--preflight-only`, `receipt_path` is `null` unless a receipt file is actually written.
+
+### Local profile overrides (portable base + ignored local binding)
+
+Use this two-file pattern for the first real 3B smoke lane:
+- committed portable base: `configs/first_3b_single_smoke.json`
+- machine-local override: `configs/local/*.json` (gitignored)
+
+CLI flags:
+- `--config-json <base.json>`
+- `--config-override-json <local.json>`
+
+Merge behavior is deterministic and fail-closed:
+- scalar fields in override replace base fields
+- arrays (`stop_tokens`, `extra_llama_server_args`) replace base arrays entirely
+- `runtime_env` is replaced by the override dictionary as a whole
+- unknown override keys are rejected with a hard error
+- invalid enum values (`topology_mode`, `endpoint_mode`, `verification_mode`) are rejected with a hard error
+
+Dry-run, preflight-only, and single-smoke all use the same merged config. Dry-run and preflight packets expose merged values in:
+- `config_snapshot`
+- `resolved_command`
+- `resolved_model_path`
+- `resolved_llama_server_path`
+- `resolved_runtime_env`
+- `resolved_request_payload`
+
+Example local override for a GPU node (`configs/local/first_3b_single_smoke.local.json`):
+
+```json
+{
+  "model_path": "/models/Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+  "llama_server_bin": "/opt/llama.cpp/build/bin/llama-server",
+  "runtime_env": {
+    "CUDA_VISIBLE_DEVICES": "0",
+    "OMP_NUM_THREADS": "8"
+  },
+  "port": 18081
+}
+```

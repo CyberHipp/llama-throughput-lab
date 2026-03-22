@@ -23,6 +23,43 @@ from throughput_lab.execution_core import (
     run_with_receipt,
 )
 
+
+def _normalize_config_json_dict(data: dict) -> dict:
+    normalized = dict(data)
+    if "topology_mode" in normalized:
+        normalized["topology_mode"] = TopologyMode(normalized["topology_mode"])
+    if "endpoint_mode" in normalized:
+        normalized["endpoint_mode"] = EndpointMode(normalized["endpoint_mode"])
+    if "verification_mode" in normalized:
+        normalized["verification_mode"] = VerificationMode(normalized["verification_mode"])
+    if "stop_tokens" in normalized:
+        normalized["stop_tokens"] = tuple(normalized["stop_tokens"])
+    if "extra_llama_server_args" in normalized:
+        normalized["extra_llama_server_args"] = tuple(normalized["extra_llama_server_args"])
+    return normalized
+
+
+def _read_config_json(path: str) -> dict:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Config JSON must be an object: {path}")
+    return payload
+
+
+def _validate_override_keys(base_data: dict, override_data: dict) -> None:
+    unknown = sorted(set(override_data.keys()) - set(base_data.keys()))
+    if unknown:
+        raise ValueError(f"Unknown override key(s): {', '.join(unknown)}")
+
+
+def _merge_config_dicts(base_data: dict, override_data: dict) -> dict:
+    _validate_override_keys(base_data, override_data)
+    merged = dict(base_data)
+    for key, value in override_data.items():
+        merged[key] = value
+    return merged
+
+
 def _stable_cli_envelope(
     *,
     mode: str,
@@ -59,6 +96,13 @@ def parse_args() -> argparse.Namespace:
         help="Optional JSON file with explicit config fields. If omitted, LLAMA_* env vars are used.",
     )
     parser.add_argument(
+        "--config-override-json",
+        help=(
+            "Optional JSON file with machine-local overrides. "
+            "Requires --config-json and fails closed on unknown keys."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print a deterministic run plan packet and exit without executing llama-server.",
@@ -83,23 +127,25 @@ def parse_args() -> argparse.Namespace:
 def load_config(path: str | None) -> RunConfig:
     if not path:
         return RunConfig.from_env()
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if "topology_mode" in data:
-        data["topology_mode"] = TopologyMode(data["topology_mode"])
-    if "endpoint_mode" in data:
-        data["endpoint_mode"] = EndpointMode(data["endpoint_mode"])
-    if "verification_mode" in data:
-        data["verification_mode"] = VerificationMode(data["verification_mode"])
-    if "stop_tokens" in data:
-        data["stop_tokens"] = tuple(data["stop_tokens"])
-    if "extra_llama_server_args" in data:
-        data["extra_llama_server_args"] = tuple(data["extra_llama_server_args"])
+    data = _normalize_config_json_dict(_read_config_json(path))
     return RunConfig(**data)
+
+
+def load_config_with_optional_override(base_path: str | None, override_path: str | None) -> RunConfig:
+    if not override_path:
+        return load_config(base_path)
+    if not base_path:
+        raise ValueError("--config-override-json requires --config-json")
+    base_raw = _read_config_json(base_path)
+    override_raw = _read_config_json(override_path)
+    merged_raw = _merge_config_dicts(base_raw, override_raw)
+    merged = _normalize_config_json_dict(merged_raw)
+    return RunConfig(**merged)
 
 
 def main() -> int:
     args = parse_args()
-    config = load_config(args.config_json)
+    config = load_config_with_optional_override(args.config_json, args.config_override_json)
 
     if args.dry_run:
         envelope, exit_code = dry_run_packet(config, output_dir=args.output_dir, intent=args.intent)
