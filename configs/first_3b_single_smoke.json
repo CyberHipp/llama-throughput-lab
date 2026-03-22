@@ -1,6 +1,6 @@
 {
-  "model_path": "/ABSOLUTE/PATH/TO/YOUR/3B_MODEL.gguf",
-  "llama_server_bin": "/ABSOLUTE/PATH/TO/YOUR/llama-server",
+  "model_path": "/models/Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+  "llama_server_bin": "/opt/llama.cpp/build/bin/llama-server",
   "host": "127.0.0.1",
   "port": 18080,
   "topology_mode": "single",
