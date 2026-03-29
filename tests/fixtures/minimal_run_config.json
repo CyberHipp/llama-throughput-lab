@@ -1,0 +1,20 @@
+{
+  "model_path": "/tmp/nonexistent-model.gguf",
+  "llama_server_bin": "python3",
+  "host": "127.0.0.1",
+  "port": 18080,
+  "topology_mode": "single",
+  "parallel": 1,
+  "concurrency": 1,
+  "n_predict": 16,
+  "temperature": 0.2,
+  "prompt": "contract test prompt",
+  "startup_delay_s": 0.0,
+  "bind_timeout_s": 2,
+  "ready_timeout_s": 2,
+  "endpoint_mode": "/completion",
+  "verification_mode": "NON_EMPTY",
+  "request_model": null,
+  "expected_text": null,
+  "runtime_env": {}
+}

@@ -47,6 +47,16 @@ This repository now contains two production-oriented tracks:
     └── runtime_service.py
 ```
 
+## Launcher-first usage (existing workflow)
+
+Run the interactive launcher exactly as before:
+
+```bash
+./run_llama_tests.py
+```
+
+This remains the default operator UX and is intentionally preserved.
+
 ## Quick start from clean clone
 
 ```bash
@@ -56,6 +66,29 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 make check
+```
+
+## Automation/backend contract (NEXUS-facing)
+
+For deterministic non-interactive automation, use:
+
+```bash
+python scripts/run_core_job.py --config-json tests/fixtures/minimal_run_config.json --dry-run
+python scripts/run_core_job.py --config-json tests/fixtures/minimal_run_config.json --preflight-only
+```
+
+Contract artifacts:
+- Integration doc: `docs/nexus_integration.md`
+- Envelope schema: `schemas/nexus_run_envelope_v1.json`
+- Receipt schema: `schemas/nexus_receipt_v1.json`
+- Golden packets: `tests/golden/*.json`
+- Contract tests: `tests/test_run_core_job_cli.py`, `tests/test_packet_schema.py`
+
+Run contract tests:
+
+```bash
+python -m unittest tests/test_run_core_job_cli.py
+python -m unittest tests/test_packet_schema.py
 ```
 
 ## Running throughput smoke lane

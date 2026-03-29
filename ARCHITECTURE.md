@@ -171,3 +171,15 @@ Provide a deterministic, bounded researcher pipeline that combines retrieval + r
 ### Why this shape
 
 This keeps the existing throughput/smoke core stable while introducing a production-friendly research orchestrator that can run dry-run offline and online retrieval modes without invasive changes to existing code paths.
+
+## NEXUS contract hardening artifacts (v1)
+
+This pass adds explicit, versioned contract artifacts for backend consumers without renaming the repo or package surface:
+
+- `docs/nexus_integration.md` (integration contract narrative)
+- `schemas/nexus_run_envelope_v1.json` (CLI envelope schema)
+- `schemas/nexus_receipt_v1.json` (receipt schema)
+- golden packets under `tests/golden/`
+- contract tests in `tests/test_run_core_job_cli.py` and `tests/test_packet_schema.py`
+
+These artifacts protect the non-interactive contract boundary while keeping launcher-centric workflows and existing throughput topology behavior unchanged.
