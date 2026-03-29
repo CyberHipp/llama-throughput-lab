@@ -144,3 +144,30 @@ The CLI now exposes three contract modes with this envelope:
 Receipt path consistency:
 - `--dry-run` / `--preflight-only` emit envelope-only packets and set `receipt_path=null`.
 - `--single-smoke` emits a receipt file and reports its path in the envelope.
+
+## llama-nexus-lab architecture (new)
+
+### Objective
+
+Provide a deterministic, bounded researcher pipeline that combines retrieval + reasoning + critique + synthesis while preserving machine-readable receipts and reproducible artifacts.
+
+### Decisions
+
+1. **Separated package namespace**
+   - Added `llama_nexus_lab/` to prevent cross-coupling with throughput-only internals.
+
+2. **Config-driven routing**
+   - `configs/nexus/default.yaml|json` define search/pipeline/runtime knobs and task->model routing.
+
+3. **Bounded loops by default**
+   - `max_iterations` exists in config and defaults to 3 to avoid runaway agent loops.
+
+4. **Receipt-first outputs**
+   - Every run writes answer, receipt, and evidence artifacts for auditability.
+
+5. **Simple dependency policy**
+   - Uses Python stdlib for deterministic operation without extra runtime dependencies.
+
+### Why this shape
+
+This keeps the existing throughput/smoke core stable while introducing a production-friendly research orchestrator that can run dry-run offline and online retrieval modes without invasive changes to existing code paths.
