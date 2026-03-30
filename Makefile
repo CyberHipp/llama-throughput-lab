@@ -12,10 +12,10 @@ lint:
 	$(PYTHON) -m compileall throughput_lab llama_nexus_lab scripts tests
 
 typecheck:
-	$(PYTHON) -m py_compile throughput_lab/execution_core.py throughput_lab/runtime_service.py scripts/run_core_job.py scripts/run_nexus_pipeline.py scripts/run_nexus_governed_smoke.py llama_nexus_lab/config_loader.py llama_nexus_lab/models.py llama_nexus_lab/pipeline.py llama_nexus_lab/router.py llama_nexus_lab/runtime.py llama_nexus_lab/verify.py
+	$(PYTHON) -m py_compile throughput_lab/execution_core.py throughput_lab/runtime_service.py scripts/run_core_job.py scripts/run_nexus_pipeline.py scripts/run_nexus_governed_smoke.py scripts/run_nexus_tui.py llama_nexus_lab/config_loader.py llama_nexus_lab/models.py llama_nexus_lab/pipeline.py llama_nexus_lab/router.py llama_nexus_lab/runtime.py llama_nexus_lab/verify.py llama_nexus_lab/gauntlet.py
 
 test:
-	$(PYTHON) -m unittest tests/test_execution_core.py tests/test_nexus_config.py tests/test_nexus_pipeline.py tests/test_verify.py tests/test_run_core_job_cli.py tests/test_packet_schema.py
+	$(PYTHON) -m unittest tests/test_execution_core.py tests/test_nexus_config.py tests/test_nexus_pipeline.py tests/test_verify.py tests/test_nexus_tui.py tests/test_run_core_job_cli.py tests/test_packet_schema.py
 
 security:
 	$(PYTHON) scripts/security_check.py

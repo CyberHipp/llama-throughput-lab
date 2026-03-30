@@ -40,7 +40,8 @@ This repository now contains two production-oriented tracks:
 ├── scripts/
 │   ├── run_core_job.py
 │   ├── run_nexus_governed_smoke.py
-│   └── run_nexus_pipeline.py
+│   ├── run_nexus_pipeline.py
+│   └── run_nexus_tui.py
 ├── tests/
 │   ├── test_execution_core.py
 │   ├── test_nexus_config.py
@@ -111,6 +112,16 @@ python scripts/run_nexus_governed_smoke.py --query "nexus governed smoke" --conf
 ```
 
 Use `--require-verify-pass` to fail closed when verification does not pass.
+
+## NEXUS TUI (custom gauntlet setup)
+
+Launch the bounded TUI scaffold for custom VorteX research gauntlets:
+
+```bash
+python scripts/run_nexus_tui.py
+```
+
+See `docs/nexus_tui.md` for preset format, menu actions, and non-goals.
 
 ## Running llama-nexus-lab pipeline
 
