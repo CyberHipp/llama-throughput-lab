@@ -1,0 +1,11 @@
+{
+  "gauntlet_name": "vortex_deep_verify",
+  "query_template": "Build a verification-first report for {topic} with explicit citations.",
+  "max_search_intents": 8,
+  "strict_citation_required": true,
+  "dry_run": false,
+  "require_verify_pass": true,
+  "mode": "deep_verify",
+  "risk_level": "high",
+  "notes": "Strict verify lane for promotion candidates."
+}

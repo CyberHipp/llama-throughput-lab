@@ -1,0 +1,41 @@
+{
+  "search": {
+    "searxng_base_url": "http://127.0.0.1:8080",
+    "categories": ["general", "science", "it"],
+    "language": "en-US",
+    "max_results_per_intent": 5,
+    "request_timeout_s": 8
+  },
+  "pipeline": {
+    "run_id_prefix": "nexus",
+    "max_search_intents": 6,
+    "max_iterations": 3,
+    "retrieval_chunk_size": 900,
+    "retrieval_top_k": 12,
+    "cache_ttl_s": 3600,
+    "strict_citation_required": true,
+    "dry_run": true
+  },
+  "runtime": {
+    "artifacts_dir": "artifacts/nexus",
+    "retry_attempts": 2,
+    "retry_backoff_s": 0.5,
+    "stage_timeout_s": 120
+  },
+  "router_rules": [
+    {"task": "router", "preferred_model": "nemotron-4b-local", "fallback_models": ["nemotron-3-nano-30b"]},
+    {"task": "reason", "preferred_model": "nemotron-cascade-2-30b", "fallback_models": ["nemotron-3-nano-30b"]},
+    {"task": "critique", "preferred_model": "nemotron-3-nano-30b", "fallback_models": ["qwen3.5-35b-a3b-q8_0"]},
+    {"task": "synthesize", "preferred_model": "nemotron-3-super-latest", "fallback_models": ["nemotron-cascade-2-30b"]}
+  ],
+  "model_profiles": [
+    {"name": "nemotron-4b-local", "endpoint": "http://127.0.0.1:11435/v1/chat/completions", "max_context_tokens": 8192, "temperature": 0.1, "max_output_tokens": 512, "timeout_s": 10, "role": "always-on orchestrator"},
+    {"name": "qwen3-embedding-4b-fp16", "endpoint": "http://192.168.1.40:11434/api/embeddings", "max_context_tokens": 32768, "temperature": 0.0, "max_output_tokens": 1, "timeout_s": 20, "role": "embedding/index"},
+    {"name": "nemotron-cascade-2-30b", "endpoint": "http://192.168.1.40:11434/v1/chat/completions", "max_context_tokens": 32768, "temperature": 0.2, "max_output_tokens": 1200, "timeout_s": 45, "role": "primary research reasoner"},
+    {"name": "qwen3-coder-30b-a3b-q8_0", "endpoint": "http://192.168.1.41:11434/v1/chat/completions", "max_context_tokens": 32768, "temperature": 0.1, "max_output_tokens": 1400, "timeout_s": 45, "role": "code agent/toolmaker"},
+    {"name": "nemotron-3-nano-30b", "endpoint": "http://192.168.1.42:11434/v1/chat/completions", "max_context_tokens": 16384, "temperature": 0.2, "max_output_tokens": 900, "timeout_s": 30, "role": "fast secondary analyst"},
+    {"name": "nemotron-3-super-latest", "endpoint": "http://192.168.1.43:11434/v1/chat/completions", "max_context_tokens": 65536, "temperature": 0.2, "max_output_tokens": 1500, "timeout_s": 80, "role": "board reviewer"},
+    {"name": "qwen3.5-35b-a3b-q8_0", "endpoint": "http://192.168.1.44:11434/v1/chat/completions", "max_context_tokens": 32768, "temperature": 0.3, "max_output_tokens": 1000, "timeout_s": 50, "role": "experimental analyst"},
+    {"name": "qwen3-reranker-8b", "endpoint": "http://192.168.1.45:11434/rerank", "max_context_tokens": 8192, "temperature": 0.0, "max_output_tokens": 1, "timeout_s": 15, "role": "reranker lane"}
+  ]
+}

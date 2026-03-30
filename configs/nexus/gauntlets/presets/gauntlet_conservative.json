@@ -1,0 +1,11 @@
+{
+  "gauntlet_name": "gauntlet_conservative",
+  "query_template": "Conservative evidence summary for {topic} with missing-evidence callouts.",
+  "max_search_intents": 4,
+  "strict_citation_required": true,
+  "dry_run": true,
+  "require_verify_pass": true,
+  "mode": "conservative",
+  "risk_level": "medium",
+  "notes": "Fail-closed default for governance checks."
+}
