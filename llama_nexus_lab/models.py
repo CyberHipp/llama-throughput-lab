@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class StageName(str, Enum):
@@ -11,6 +12,7 @@ class StageName(str, Enum):
     REASON = "reason"
     CRITIQUE = "critique"
     SYNTHESIZE = "synthesize"
+    VERIFY = "verify"
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,18 @@ class StageReceipt:
     stage: StageName
     status: str
     details: dict[str, object]
+    trace_id: str | None = None
+    asset_id: str | None = None
+    agent_id: str | None = None
+    outputs: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class RunEnvelope:
+    request_id: str
+    user_text: str
+    context: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -92,3 +106,4 @@ class PipelineResult:
     confidence: str
     receipts: tuple[StageReceipt, ...]
     evidence: tuple[EvidenceDocument, ...]
+    request_id: str | None = None
