@@ -1,0 +1,15 @@
+{
+  "packet_version": "1.0",
+  "mode": "dry-run",
+  "status": "success",
+  "run_id": "RUN_ID_PLACEHOLDER",
+  "timestamp_utc": "TIMESTAMP_PLACEHOLDER",
+  "intent": "contract-dry-run",
+  "tool_name": "llama-throughput-lab",
+  "receipt_path": null,
+  "failure_summary": "none",
+  "next_step": "Run --preflight-only or --single-smoke.",
+  "data": {
+    "contract_version": "nexus-contract-v1"
+  }
+}

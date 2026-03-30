@@ -22,6 +22,15 @@ from throughput_lab.execution_core import (
     preflight_packet,
     run_with_receipt,
 )
+from throughput_lab.identity import CONTRACT_VERSION, TOOL_NAME
+
+
+def _with_contract_data(envelope: dict) -> dict:
+    payload = dict(envelope)
+    data = dict(payload.get("data") or {})
+    data.setdefault("contract_version", CONTRACT_VERSION)
+    payload["data"] = data
+    return payload
 
 
 def _normalize_config_json_dict(data: dict) -> dict:
@@ -79,11 +88,11 @@ def _stable_cli_envelope(
         "run_id": run_id,
         "timestamp_utc": timestamp_utc,
         "intent": intent,
-        "tool_name": "llama-throughput-lab",
+        "tool_name": TOOL_NAME,
         "receipt_path": receipt_path,
         "failure_summary": failure_summary,
         "next_step": next_step,
-        "data": data,
+        "data": {**data, "contract_version": CONTRACT_VERSION},
     }
 
 
@@ -148,7 +157,8 @@ def main() -> int:
     config = load_config_with_optional_override(args.config_json, args.config_override_json)
 
     if args.dry_run:
-        envelope, exit_code = dry_run_packet(config, output_dir=args.output_dir, intent=args.intent)
+        envelope, exit_code = dry_run_packet(config, output_dir=args.output_dir, intent=args.intent, tool_name=TOOL_NAME)
+        envelope = _with_contract_data(envelope)
         rendered = json.dumps(envelope, indent=2, sort_keys=True)
         print(rendered)
         if args.plan_out:
@@ -156,7 +166,8 @@ def main() -> int:
         return exit_code
 
     if args.preflight_only:
-        envelope, exit_code = preflight_packet(config, output_dir=args.output_dir, intent=args.intent)
+        envelope, exit_code = preflight_packet(config, output_dir=args.output_dir, intent=args.intent, tool_name=TOOL_NAME)
+        envelope = _with_contract_data(envelope)
         rendered = json.dumps(envelope, indent=2, sort_keys=True)
         print(rendered)
         if args.plan_out:

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llama-throughput-lab/schemas/nexus_run_envelope_v1.json",
+  "title": "NEXUS Run Envelope v1",
+  "type": "object",
+  "required": [
+    "packet_version",
+    "mode",
+    "status",
+    "run_id",
+    "intent",
+    "tool_name",
+    "receipt_path",
+    "failure_summary",
+    "next_step",
+    "data"
+  ],
+  "properties": {
+    "packet_version": {"type": "string"},
+    "mode": {"type": "string", "enum": ["dry-run", "preflight-only", "single-smoke"]},
+    "status": {"type": "string", "enum": ["success", "failure"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "timestamp_utc": {"type": ["string", "null"]},
+    "intent": {"type": "string"},
+    "tool_name": {"type": "string"},
+    "receipt_path": {"type": ["string", "null"]},
+    "failure_summary": {"type": "string"},
+    "next_step": {"type": "string"},
+    "data": {"type": "object"}
+  },
+  "additionalProperties": true
+}
