@@ -1,0 +1,17 @@
+{
+  "packet_version": "1.0",
+  "mode": "single-smoke",
+  "status": "success",
+  "run_id": "RUN_ID_PLACEHOLDER",
+  "timestamp_utc": "TIMESTAMP_PLACEHOLDER",
+  "intent": "contract-single-smoke",
+  "tool_name": "llama-throughput-lab",
+  "receipt_path": "artifacts/receipts/RUN_ID_PLACEHOLDER.receipt.json",
+  "failure_summary": "none",
+  "next_step": "Promote this receipt to operator review and wire into TUI adapter.",
+  "data": {
+    "response_path": "artifacts/receipts/RUN_ID_PLACEHOLDER.response.json",
+    "overall_verification_pass": true,
+    "contract_version": "nexus-contract-v1"
+  }
+}
