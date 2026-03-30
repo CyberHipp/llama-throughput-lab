@@ -89,6 +89,7 @@ Run contract tests:
 ```bash
 python -m unittest tests/test_run_core_job_cli.py
 python -m unittest tests/test_packet_schema.py
+python -m unittest tests/test_verify.py
 ```
 
 ## Running throughput smoke lane
@@ -96,6 +97,16 @@ python -m unittest tests/test_packet_schema.py
 ```bash
 python scripts/run_core_job.py --config-json configs/first_3b_single_smoke.json --dry-run
 ```
+
+## Governed smoke lane (bounded)
+
+A minimal governed runtime check is available via:
+
+```bash
+python scripts/run_nexus_governed_smoke.py --query "nexus governed smoke" --config configs/nexus/default.json
+```
+
+Use `--require-verify-pass` to fail closed when verification does not pass.
 
 ## Running llama-nexus-lab pipeline
 

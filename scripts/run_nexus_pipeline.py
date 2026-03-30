@@ -3,6 +3,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from llama_nexus_lab import load_nexus_config, run_research_pipeline, write_pipeline_artifacts
 
@@ -27,7 +33,11 @@ def main() -> int:
         json.dumps(
             {
                 "run_id": result.run_id,
+                "trace_id": result.trace_id,
+                "request_id": result.request_id,
                 "confidence": result.confidence,
+                "verification_pass": result.verification_pass,
+                "verification_reason": result.verification_reason,
                 "artifacts": artifacts,
             },
             sort_keys=True,

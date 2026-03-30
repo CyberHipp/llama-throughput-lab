@@ -183,3 +183,12 @@ This pass adds explicit, versioned contract artifacts for backend consumers with
 - contract tests in `tests/test_run_core_job_cli.py` and `tests/test_packet_schema.py`
 
 These artifacts protect the non-interactive contract boundary while keeping launcher-centric workflows and existing throughput topology behavior unchanged.
+
+## Governed lane operational hardening (bounded follow-up)
+
+This follow-up keeps scope narrow and operational:
+- add a governed smoke runner (`scripts/run_nexus_governed_smoke.py`) for deterministic local contract checks,
+- add verification-stage coverage checks (`llama_nexus_lab/verify.py`) with strict fail-closed behavior when citations are required,
+- persist trace artifact metadata (`llama_nexus_lab/runtime.py`) so run receipts and artifact paths are coherently linked by `trace_id`/`request_id`.
+
+No benchmark topology behavior or launcher UX was removed in this pass.
