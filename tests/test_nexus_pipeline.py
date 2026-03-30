@@ -6,6 +6,7 @@ from pathlib import Path
 from llama_nexus_lab.config_loader import load_nexus_config
 from llama_nexus_lab.pipeline import run_research_pipeline, write_pipeline_artifacts
 from llama_nexus_lab.router import expand_intents, select_model
+from llama_nexus_lab.runtime import build_run_envelope
 
 
 class NexusPipelineTests(unittest.TestCase):
@@ -35,11 +36,14 @@ class NexusPipelineTests(unittest.TestCase):
                 router_rules=cfg.router_rules,
                 model_profiles=cfg.model_profiles,
             )
-            result = run_research_pipeline("nexus architecture", cfg)
+            envelope = build_run_envelope(user_text="nexus architecture", metadata={"mode": "test"})
+            result = run_research_pipeline("nexus architecture", cfg, envelope=envelope)
             paths = write_pipeline_artifacts(result, cfg.runtime.artifacts_dir)
             self.assertTrue(Path(paths["answer_path"]).exists())
             receipt = json.loads(Path(paths["receipt_path"]).read_text(encoding="utf-8"))
             self.assertEqual(receipt["run_id"], result.run_id)
+            self.assertEqual(receipt["request_id"], result.request_id)
+            self.assertIn("trace_id", receipt["receipts"][0])
 
 
 if __name__ == "__main__":

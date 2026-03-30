@@ -1,0 +1,36 @@
+agents:
+  - agent_id: router
+    purpose: Decompose user query into intents and route tasks.
+    model: nemotron-4b-local
+    outputs: [intents, route_plan]
+    receipt_required: true
+
+  - agent_id: hypothesis
+    purpose: Generate bounded hypotheses for the scientist loop.
+    model: nemotron-cascade-2-30b
+    outputs: [hypotheses]
+    receipt_required: true
+
+  - agent_id: planner
+    purpose: Define experiments, required evidence, and stop conditions.
+    model: qwen3-coder-30b-a3b-q8_0
+    outputs: [experiment_plan]
+    receipt_required: true
+
+  - agent_id: executor
+    purpose: Execute retrieval/tools and capture receipts.
+    model: qwen3-coder-30b-a3b-q8_0
+    outputs: [artifacts, logs]
+    receipt_required: true
+
+  - agent_id: judge
+    purpose: Validate whether evidence passes stated criteria.
+    model: nemotron-3-nano-30b
+    outputs: [verdict, failure_reasons]
+    receipt_required: true
+
+  - agent_id: synthesizer
+    purpose: Produce final answer + confidence + gaps.
+    model: nemotron-3-super-latest
+    outputs: [final_report]
+    receipt_required: true
