@@ -10,9 +10,10 @@ This runbook is the operator reference for tuning, routing, adapters, and prompt
 
 ## 2) Config files
 
-- Primary runtime config:
-  - `configs/nexus/default.yaml`
+- Canonical executable runtime config:
   - `configs/nexus/default.json`
+- YAML mirror/reference (not canonical for execution in current loader behavior):
+  - `configs/nexus/default.yaml`
 - Prompt libraries:
   - `prompt_library/prompts.yaml`
   - `prompt_library/prompts.json`
@@ -22,6 +23,8 @@ This runbook is the operator reference for tuning, routing, adapters, and prompt
 - Model cards:
   - `model_cards/model_cards.yaml`
   - `model_cards/model_cards.json`
+
+> Note: current `load_nexus_config()` execution path treats JSON as canonical; YAML remains a reference mirror and is fail-closed in tests in this repo.
 
 ## 3) Fine-grained knobs and variables
 

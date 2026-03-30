@@ -13,7 +13,7 @@ from typing import Any
 from llama_nexus_lab.models import EvidenceDocument, NexusConfig, PipelineResult, StageName, StageReceipt
 from llama_nexus_lab.router import expand_intents, select_model
 from llama_nexus_lab.runtime import build_trace_context, write_trace_artifact
-from llama_nexus_lab.verify import verify_evidence_coverage
+from llama_nexus_lab.verify import verify_citation_urls, verify_evidence_coverage
 
 
 def _hash_content(value: str) -> str:
@@ -156,14 +156,26 @@ def run_research_pipeline(query: str, config: NexusConfig) -> PipelineResult:
         tuple(docs),
         strict_citation_required=config.pipeline.strict_citation_required,
     )
-    if not verify_pass:
+    citation_pass, citation_reason = verify_citation_urls(
+        answer,
+        tuple(docs),
+        strict_citation_required=config.pipeline.strict_citation_required,
+    )
+    overall_verify_pass = verify_pass and citation_pass
+    overall_verify_reason = verify_reason if citation_pass else f"{verify_reason}; {citation_reason}"
+
+    if not overall_verify_pass:
         confidence = "low"
-        answer = answer + "\n\nVerification warning: " + verify_reason
+        answer = answer + "\n\nVerification warning: " + overall_verify_reason
     receipts.append(
         StageReceipt(
             stage=StageName.VERIFY,
-            status="pass" if verify_pass else "fail",
-            details={"reason": verify_reason, "coverage": round(coverage, 3)},
+            status="pass" if overall_verify_pass else "fail",
+            details={
+                "reason": overall_verify_reason,
+                "coverage": round(coverage, 3),
+                "citation_url_check": citation_reason,
+            },
         )
     )
 
@@ -175,8 +187,8 @@ def run_research_pipeline(query: str, config: NexusConfig) -> PipelineResult:
         confidence=confidence,
         receipts=tuple(receipts),
         evidence=tuple(docs),
-        verification_pass=verify_pass,
-        verification_reason=verify_reason,
+        verification_pass=overall_verify_pass,
+        verification_reason=overall_verify_reason,
     )
 
 

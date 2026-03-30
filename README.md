@@ -3,7 +3,7 @@
 This repository now contains two production-oriented tracks:
 
 1. **`llama-throughput-lab`**: deterministic throughput/smoke execution core for `llama-server`.
-2. **`llama-nexus-lab`**: Perplexity-style researcher and bounded AI-scientist orchestration loop with receipts.
+2. **`llama-nexus-lab`**: bounded operational skeleton for governed retrieval/reasoning receipts (not a full embedding/rerank/model-call stack).
 
 ## Repository tree
 
@@ -25,7 +25,9 @@ This repository now contains two production-oriented tracks:
 │   ├── config_loader.py
 │   ├── models.py
 │   ├── pipeline.py
-│   └── router.py
+│   ├── router.py
+│   ├── runtime.py
+│   └── verify.py
 ├── Makefile
 ├── model_cards/
 │   ├── model_cards.json
@@ -37,11 +39,13 @@ This repository now contains two production-oriented tracks:
 ├── requirements.txt
 ├── scripts/
 │   ├── run_core_job.py
+│   ├── run_nexus_governed_smoke.py
 │   └── run_nexus_pipeline.py
 ├── tests/
 │   ├── test_execution_core.py
 │   ├── test_nexus_config.py
-│   └── test_nexus_pipeline.py
+│   ├── test_nexus_pipeline.py
+│   └── test_verify.py
 └── throughput_lab/
     ├── execution_core.py
     └── runtime_service.py
