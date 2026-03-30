@@ -1,0 +1,32 @@
+assets:
+  - asset_id: router_system
+    version: 1.0.0
+    owner: llama-throughput-lab
+    kind: prompt_config
+    purpose: Route incoming query into bounded search intents and smallest capable model lane.
+    output_fields: [query, intent_count, router_model]
+    source_path: prompt_library/prompts.yaml
+
+  - asset_id: reasoner_system
+    version: 1.0.0
+    owner: llama-throughput-lab
+    kind: prompt_config
+    purpose: Produce grounded reasoning from retrieved evidence with explicit uncertainty.
+    output_fields: [model, evidence_count]
+    source_path: prompt_library/prompts.yaml
+
+  - asset_id: critic_system
+    version: 1.0.0
+    owner: llama-throughput-lab
+    kind: prompt_config
+    purpose: Critique answer drafts for unsupported claims and missing citations.
+    output_fields: [model, citation_required]
+    source_path: prompt_library/prompts.yaml
+
+  - asset_id: synthesizer_system
+    version: 1.0.0
+    owner: llama-throughput-lab
+    kind: prompt_config
+    purpose: Produce final concise answer with confidence and evidence-backed synthesis.
+    output_fields: [model, confidence]
+    source_path: prompt_library/prompts.yaml
