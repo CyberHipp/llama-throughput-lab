@@ -144,3 +144,51 @@ The CLI now exposes three contract modes with this envelope:
 Receipt path consistency:
 - `--dry-run` / `--preflight-only` emit envelope-only packets and set `receipt_path=null`.
 - `--single-smoke` emits a receipt file and reports its path in the envelope.
+
+## llama-nexus-lab architecture (new)
+
+### Objective
+
+Provide a deterministic, bounded researcher pipeline that combines retrieval + reasoning + critique + synthesis while preserving machine-readable receipts and reproducible artifacts.
+
+### Decisions
+
+1. **Separated package namespace**
+   - Added `llama_nexus_lab/` to prevent cross-coupling with throughput-only internals.
+
+2. **Config-driven routing**
+   - `configs/nexus/default.yaml|json` define search/pipeline/runtime knobs and task->model routing.
+
+3. **Bounded loops by default**
+   - `max_iterations` exists in config and defaults to 3 to avoid runaway agent loops.
+
+4. **Receipt-first outputs**
+   - Every run writes answer, receipt, and evidence artifacts for auditability.
+
+5. **Simple dependency policy**
+   - Uses Python stdlib for deterministic operation without extra runtime dependencies.
+
+### Why this shape
+
+This keeps the existing throughput/smoke core stable while introducing a production-friendly research orchestrator that can run dry-run offline and online retrieval modes without invasive changes to existing code paths.
+
+## NEXUS contract hardening artifacts (v1)
+
+This pass adds explicit, versioned contract artifacts for backend consumers without renaming the repo or package surface:
+
+- `docs/nexus_integration.md` (integration contract narrative)
+- `schemas/nexus_run_envelope_v1.json` (CLI envelope schema)
+- `schemas/nexus_receipt_v1.json` (receipt schema)
+- golden packets under `tests/golden/`
+- contract tests in `tests/test_run_core_job_cli.py` and `tests/test_packet_schema.py`
+
+These artifacts protect the non-interactive contract boundary while keeping launcher-centric workflows and existing throughput topology behavior unchanged.
+
+## Governed lane operational hardening (bounded follow-up)
+
+This follow-up keeps scope narrow and operational:
+- add a governed smoke runner (`scripts/run_nexus_governed_smoke.py`) for deterministic local contract checks,
+- add verification-stage coverage checks (`llama_nexus_lab/verify.py`) with strict fail-closed behavior when citations are required,
+- persist trace artifact metadata (`llama_nexus_lab/runtime.py`) so run receipts and artifact paths are coherently linked by `trace_id`/`request_id`.
+
+No benchmark topology behavior or launcher UX was removed in this pass.
