@@ -171,6 +171,49 @@ class NexusTuiTests(unittest.TestCase):
         self.assertIn("turn_packets", payload)
         self.assertIn("cockpit", payload)
         self.assertIn("loaded_gauntlet", payload["cockpit"])
+        self.assertIn("last_action_result", payload["cockpit"])
+
+
+    def test_action_bridge_load_preview_enqueue_and_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            session = Path(td) / "session.json"
+            with mock.patch.object(run_nexus_tui, "SESSION_PATH", session):
+                with mock.patch("builtins.print") as mock_print:
+                    rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "load_preset", "source": "library", "selection": "1", "topic": "llama throughput"})])
+                self.assertEqual(rc, 0)
+                payload = json.loads(mock_print.call_args[0][0])
+                self.assertEqual(payload["status"], "ok")
+
+                with mock.patch("builtins.print") as mock_print:
+                    rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "enqueue"})])
+                self.assertEqual(rc, 0)
+                enqueue_payload = json.loads(mock_print.call_args[0][0])
+                self.assertEqual(enqueue_payload["status"], "ok")
+
+                with mock.patch("scripts.run_nexus_tui.control_plane.run_queue", return_value={"status": "completed", "kind": "queue"}):
+                    with mock.patch("builtins.print") as mock_print:
+                        rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "run_queue", "stop_on_fail": True})])
+                self.assertEqual(rc, 0)
+                runq_payload = json.loads(mock_print.call_args[0][0])
+                self.assertEqual(runq_payload["result"]["kind"], "queue")
+
+                with mock.patch("builtins.print") as mock_print:
+                    rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "unknown_action"})])
+                self.assertEqual(rc, 1)
+                err_payload = json.loads(mock_print.call_args[0][0])
+                self.assertEqual(err_payload["status"], "error")
+                self.assertIn("error_type", err_payload)
+
+    def test_action_bridge_generate_turn_packet(self):
+        with tempfile.TemporaryDirectory() as td:
+            session = Path(td) / "session.json"
+            with mock.patch.object(run_nexus_tui, "SESSION_PATH", session):
+                with mock.patch("builtins.print") as mock_print:
+                    rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "generate_turn_packet", "game_id": "g1", "turn": 2, "move": "e4", "actor": "op", "fen": "startpos"})])
+            self.assertEqual(rc, 0)
+            payload = json.loads(mock_print.call_args[0][0])
+            self.assertEqual(payload["status"], "ok")
+            self.assertIn("packet_path", payload["result"])
 
     def test_non_interactive_fallback_smoke_preview(self):
         inputs = iter(

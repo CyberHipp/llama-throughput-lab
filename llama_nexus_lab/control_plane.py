@@ -15,6 +15,7 @@ PRESET_DIR = REPO_ROOT / "configs/nexus/gauntlets/presets"
 TUI_RUNS_DIR = REPO_ROOT / "artifacts/nexus/tui_runs"
 QUEUE_DIR = TUI_RUNS_DIR / "queue"
 EMAIL_TURNS_DIR = REPO_ROOT / "artifacts/nexus/email_turns"
+COCKPIT_STATE_PATH = REPO_ROOT / "artifacts/nexus/cockpit_state/session.json"
 COCKPIT_SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
 
 
@@ -267,6 +268,65 @@ def run_queue(queue: list[QueueItem], stop_on_fail: bool, queue_id: str, queue_d
     return summary
 
 
+
+
+def default_cockpit_session_state() -> dict:
+    return {
+        "selected_screen": "Dashboard",
+        "selected_indices": {name: 0 for name in COCKPIT_SCREENS},
+        "loaded_gauntlet": None,
+        "queue_items": [],
+        "last_action_result": None,
+        "last_error": None,
+    }
+
+
+def save_cockpit_session_state(state: dict, state_path: Path = COCKPIT_STATE_PATH) -> str:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return str(state_path)
+
+
+def load_cockpit_session_state(state_path: Path = COCKPIT_STATE_PATH) -> dict:
+    baseline = default_cockpit_session_state()
+    if not state_path.exists():
+        save_cockpit_session_state(baseline, state_path=state_path)
+        return baseline
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    baseline.update({k: v for k, v in payload.items() if k in baseline})
+    if not isinstance(baseline.get("selected_indices"), dict):
+        baseline["selected_indices"] = {name: 0 for name in COCKPIT_SCREENS}
+    for name in COCKPIT_SCREENS:
+        baseline["selected_indices"].setdefault(name, 0)
+    return baseline
+
+
+def spec_to_dict(spec: GauntletSpec | None) -> dict | None:
+    if spec is None:
+        return None
+    return {
+        "gauntlet_name": spec.gauntlet_name,
+        "query": spec.query,
+        "max_search_intents": spec.max_search_intents,
+        "strict_citation_required": spec.strict_citation_required,
+        "dry_run": spec.dry_run,
+        "require_verify_pass": spec.require_verify_pass,
+    }
+
+
+def dict_to_spec(payload: dict | None) -> GauntletSpec | None:
+    if not payload:
+        return None
+    spec = GauntletSpec(
+        gauntlet_name=payload["gauntlet_name"],
+        query=payload["query"],
+        max_search_intents=int(payload["max_search_intents"]),
+        strict_citation_required=bool(payload["strict_citation_required"]),
+        dry_run=bool(payload["dry_run"]),
+        require_verify_pass=bool(payload["require_verify_pass"]),
+    )
+    spec.validate()
+    return spec
 
 def summarize_loaded_gauntlet(spec: GauntletSpec | None) -> dict | None:
     if spec is None:

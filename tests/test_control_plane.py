@@ -118,6 +118,16 @@ class ControlPlaneTests(unittest.TestCase):
         self.assertGreaterEqual(snapshot["presets"]["count"], 1)
         self.assertIn("recent_artifacts", snapshot["artifacts"])
 
+    def test_session_state_init_load_save(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            state_path = Path(td) / "session.json"
+            first = control_plane.load_cockpit_session_state(state_path)
+            self.assertIn("selected_screen", first)
+            first["last_error"] = "boom"
+            control_plane.save_cockpit_session_state(first, state_path=state_path)
+            loaded = control_plane.load_cockpit_session_state(state_path)
+            self.assertEqual(loaded["last_error"], "boom")
+
 
 if __name__ == "__main__":
     unittest.main()
