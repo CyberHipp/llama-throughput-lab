@@ -18,3 +18,5 @@ python scripts/validate_nexus_cockpit_contract.py --kind snapshot --json-file te
 python scripts/validate_nexus_cockpit_contract.py --kind action --json-file tests/fixtures/cockpit/action_load_preset.json
 python scripts/validate_nexus_cockpit_contract.py --kind result --json-file tests/fixtures/cockpit/action_result_example.json
 ```
+
+See also: `docs/nexus_cockpit_contract_smoke.md` for end-to-end evidence bundle generation.

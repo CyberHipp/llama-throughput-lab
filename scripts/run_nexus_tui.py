@@ -153,8 +153,6 @@ def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
 def _persist_run_summary(run_id: str, payload: dict) -> str:
     return control_plane.persist_run_summary(run_id, payload, tui_runs_dir=TUI_RUNS_DIR)
 
-def _persist_queue_summary(queue_id: str, payload: dict) -> str:
-    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
@@ -495,7 +493,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dump-state", action="store_true", help="Print machine-readable cockpit state snapshot and exit")
     parser.add_argument("--action-json", help="Run one machine-readable cockpit action payload")
     parser.add_argument("--action-file", help="Path to JSON payload for one machine-readable cockpit action")
+    parser.add_argument("--session-path", help="Optional cockpit session state path override")
+    parser.add_argument("--receipts-dir", help="Optional cockpit receipts dir override")
     args = parser.parse_args(argv or [])
+
+    global SESSION_PATH, RECEIPTS_DIR
+    if args.session_path:
+        SESSION_PATH = Path(args.session_path)
+    if args.receipts_dir:
+        RECEIPTS_DIR = Path(args.receipts_dir)
 
     state = _new_state()
 

@@ -128,6 +128,7 @@ Fullscreen Cockpit v2 now supports the existing workflows directly (new/load/pre
 Cockpit v2 also exposes a machine-readable action bridge via `--action-json` / `--action-file` for non-terminal clients.
 Versioned Cockpit contracts and receipt history are documented in `docs/nexus_cockpit_contract.md`.
 Use `scripts/validate_nexus_cockpit_contract.py` to validate snapshot/action/result/receipt artifacts against versioned cockpit schemas.
+Run `python3 scripts/run_nexus_cockpit_contract_smoke.py` to generate a validated cockpit contract evidence bundle.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`
