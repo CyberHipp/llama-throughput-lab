@@ -2,6 +2,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from llama_nexus_lab.config_loader import load_nexus_config
 from llama_nexus_lab.pipeline import run_research_pipeline, write_pipeline_artifacts
@@ -27,6 +29,7 @@ class NexusPipelineTests(unittest.TestCase):
                 retry_attempts=cfg.runtime.retry_attempts,
                 retry_backoff_s=cfg.runtime.retry_backoff_s,
                 stage_timeout_s=cfg.runtime.stage_timeout_s,
+                reasoner_adapter=cfg.runtime.reasoner_adapter,
             )
             cfg = cfg.__class__(
                 search=cfg.search,
@@ -44,6 +47,88 @@ class NexusPipelineTests(unittest.TestCase):
             self.assertIn("verification_pass", receipt)
             stages = [row["stage"] for row in receipt["receipts"]]
             self.assertIn("verify", stages)
+
+    def test_live_reasoner_adapter_success_updates_reason_receipt(self):
+        cfg = load_nexus_config("configs/nexus/default.json")
+        patched_pipeline = cfg.pipeline.__class__(
+            run_id_prefix=cfg.pipeline.run_id_prefix,
+            max_search_intents=cfg.pipeline.max_search_intents,
+            max_iterations=cfg.pipeline.max_iterations,
+            retrieval_chunk_size=cfg.pipeline.retrieval_chunk_size,
+            retrieval_top_k=cfg.pipeline.retrieval_top_k,
+            cache_ttl_s=cfg.pipeline.cache_ttl_s,
+            strict_citation_required=cfg.pipeline.strict_citation_required,
+            dry_run=False,
+        )
+        patched_runtime = cfg.runtime.__class__(
+            artifacts_dir=cfg.runtime.artifacts_dir,
+            retry_attempts=cfg.runtime.retry_attempts,
+            retry_backoff_s=cfg.runtime.retry_backoff_s,
+            stage_timeout_s=cfg.runtime.stage_timeout_s,
+            reasoner_adapter=cfg.runtime.reasoner_adapter.__class__(
+                enabled=True,
+                base_url="http://adapter.local",
+                model="fake-reasoner",
+                timeout_s=5,
+            ),
+        )
+        cfg = cfg.__class__(
+            search=cfg.search,
+            pipeline=patched_pipeline,
+            runtime=patched_runtime,
+            router_rules=cfg.router_rules,
+            model_profiles=cfg.model_profiles,
+        )
+        fake_response = mock.MagicMock()
+        fake_response.__enter__.return_value = fake_response
+        fake_response.__exit__.return_value = False
+        fake_response.status = 200
+        fake_response.read.return_value = b'{"choices":[{"message":{"content":"live adapter answer"}}]}'
+        with mock.patch("llama_nexus_lab.pipeline._search_intent", return_value=[]):
+            with mock.patch("llama_nexus_lab.pipeline.urllib.request.urlopen", return_value=fake_response):
+                result = run_research_pipeline("nexus architecture", cfg)
+        reason_stage = [row for row in result.receipts if row.stage.value == "reason"][0]
+        self.assertEqual(reason_stage.status, "pass")
+        self.assertTrue(reason_stage.details["adapter_used"])
+        self.assertEqual(reason_stage.details["adapter_model"], "fake-reasoner")
+        self.assertIn("live adapter answer", result.answer)
+
+    def test_live_reasoner_adapter_failure_fails_closed(self):
+        cfg = load_nexus_config("configs/nexus/default.json")
+        patched_pipeline = cfg.pipeline.__class__(
+            run_id_prefix=cfg.pipeline.run_id_prefix,
+            max_search_intents=cfg.pipeline.max_search_intents,
+            max_iterations=cfg.pipeline.max_iterations,
+            retrieval_chunk_size=cfg.pipeline.retrieval_chunk_size,
+            retrieval_top_k=cfg.pipeline.retrieval_top_k,
+            cache_ttl_s=cfg.pipeline.cache_ttl_s,
+            strict_citation_required=cfg.pipeline.strict_citation_required,
+            dry_run=False,
+        )
+        patched_runtime = cfg.runtime.__class__(
+            artifacts_dir=cfg.runtime.artifacts_dir,
+            retry_attempts=cfg.runtime.retry_attempts,
+            retry_backoff_s=cfg.runtime.retry_backoff_s,
+            stage_timeout_s=cfg.runtime.stage_timeout_s,
+            reasoner_adapter=cfg.runtime.reasoner_adapter.__class__(
+                enabled=True,
+                base_url="http://adapter.local",
+                model="fake-reasoner",
+                timeout_s=5,
+            ),
+        )
+        cfg = cfg.__class__(
+            search=cfg.search,
+            pipeline=patched_pipeline,
+            runtime=patched_runtime,
+            router_rules=cfg.router_rules,
+            model_profiles=cfg.model_profiles,
+        )
+        with mock.patch("llama_nexus_lab.pipeline._search_intent", return_value=[]):
+            with mock.patch("llama_nexus_lab.pipeline.urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+                with self.assertRaises(RuntimeError) as ctx:
+                    run_research_pipeline("nexus architecture", cfg)
+        self.assertIn("reason_stage_timeout", str(ctx.exception))
 
 
 if __name__ == "__main__":
