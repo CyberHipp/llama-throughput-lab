@@ -131,6 +131,27 @@ def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, com
     return control_plane.build_launch_summary(spec, run_id, config_path, command, payload)
 
 
+def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
+    reason = payload.get("verification_reason") or payload.get("reason")
+    if not reason and payload.get("exit_code", 1) != 0:
+        reason = payload.get("stderr") or "run failed"
+    summary = {
+        "run_id": payload.get("run_id", run_id),
+        "gauntlet_name": spec.gauntlet_name,
+        "config_path": config_path,
+        "command": command,
+        "artifacts": payload.get("artifacts"),
+        "verification_pass": payload.get("verification_pass"),
+        "verification_reason": payload.get("verification_reason"),
+        "exit_code": payload.get("exit_code", 1),
+    }
+    if payload.get("stderr"):
+        summary["stderr"] = payload["stderr"]
+    if reason:
+        summary["reason"] = reason
+    return summary
+
+
 def _queue_run_item(item: QueueItem) -> dict:
     return control_plane.queue_run_item(item)
 
