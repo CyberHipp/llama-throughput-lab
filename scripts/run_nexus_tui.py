@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -12,16 +11,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from llama_nexus_lab.email_turn_adapter import build_email_bundle, build_turn_packet, serialize_turn_packet
-from llama_nexus_lab.gauntlet import (
-    GauntletSpec,
-    QueueItem,
-    build_temp_runtime_config,
-    load_gauntlet_spec,
-    process_queue,
-    save_gauntlet_spec,
-    write_queue_manifest,
-)
+from llama_nexus_lab import control_plane
+from llama_nexus_lab.gauntlet import GauntletSpec, QueueItem, load_gauntlet_spec, save_gauntlet_spec
 
 BASE_CONFIG = REPO_ROOT / "configs/nexus/default.json"
 GAUNTLET_DIR = REPO_ROOT / "configs/nexus/gauntlets"
@@ -41,6 +32,8 @@ MENU = [
     "8. Generate Turn Packet (Email Chess Adapter)",
     "9. Exit",
 ]
+
+SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
 
 
 def _prompt_bool(label: str) -> bool:
@@ -73,27 +66,6 @@ def _preset_path(name: str) -> Path:
     return GAUNTLET_DIR / f"{name}.json"
 
 
-def _available_library_presets() -> list[str]:
-    if not PRESET_DIR.exists():
-        return []
-    return sorted(path.stem for path in PRESET_DIR.glob("*.json"))
-
-
-def _library_preset_info() -> list[dict[str, str | None]]:
-    entries: list[dict[str, str | None]] = []
-    for name in _available_library_presets():
-        payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
-        entries.append(
-            {
-                "name": name,
-                "mode": payload.get("mode"),
-                "risk_level": payload.get("risk_level"),
-                "notes": payload.get("notes"),
-            }
-        )
-    return entries
-
-
 def _parse_source(source_raw: str) -> str:
     source = source_raw.strip().lower()
     if source not in {"library", "custom"}:
@@ -101,139 +73,62 @@ def _parse_source(source_raw: str) -> str:
     return source
 
 
+# Backward-compatible wrappers for tests
+
+def _available_library_presets() -> list[str]:
+    return control_plane.available_library_presets(PRESET_DIR)
+
+
+def _library_preset_info() -> list[dict[str, str | None]]:
+    return control_plane.list_library_presets(PRESET_DIR)
+
+
 def _resolve_library_selection(selection_raw: str, presets: list[dict[str, str | None]]) -> str:
-    selection = selection_raw.strip()
-    names = [row["name"] for row in presets]
-    if selection.isdigit():
-        index = int(selection)
-        if index < 1 or index > len(names):
-            raise ValueError(f"Library selection '{selection}' is out of range. Available presets: {', '.join(names)}")
-        return names[index - 1]
-    if selection in names:
-        return selection
-    raise FileNotFoundError(f"Library preset '{selection}' not found. Available presets: {', '.join(names)}")
+    return control_plane.resolve_library_selection(selection_raw, presets)
 
 
 def _load_library_preset(name: str) -> tuple[GauntletSpec, dict[str, str | None]]:
     preset_path = PRESET_DIR / f"{name}.json"
     if not preset_path.exists():
-        available = _available_library_presets()
-        raise FileNotFoundError(
-            f"Library preset '{name}' not found. Available presets: {', '.join(available) if available else '(none)'}"
-        )
+        return control_plane.load_library_preset(name, topic=None, preset_dir=PRESET_DIR)
+
     payload = json.loads(preset_path.read_text(encoding="utf-8"))
+    topic = None
     if "query" not in payload:
-        template = payload.get("query_template", "")
         topic = input("topic placeholder value: ").strip() or "default topic"
-        payload["query"] = template.replace("{topic}", topic)
-    spec = GauntletSpec(
-        gauntlet_name=payload["gauntlet_name"],
-        query=payload["query"],
-        max_search_intents=int(payload["max_search_intents"]),
-        strict_citation_required=bool(payload["strict_citation_required"]),
-        dry_run=bool(payload["dry_run"]),
-        require_verify_pass=bool(payload["require_verify_pass"]),
-    )
-    spec.validate()
-    return spec, {
-        "mode": payload.get("mode"),
-        "risk_level": payload.get("risk_level"),
-        "notes": payload.get("notes"),
-    }
+    return control_plane.load_library_preset(name, topic=topic, preset_dir=PRESET_DIR)
 
 
 def build_launch_command(spec: GauntletSpec, runtime_config_path: str) -> list[str]:
-    governed_path = REPO_ROOT / "scripts/run_nexus_governed_smoke.py"
-    pipeline_path = REPO_ROOT / "scripts/run_nexus_pipeline.py"
-
-    if spec.require_verify_pass:
-        return [
-            sys.executable,
-            str(governed_path),
-            "--query",
-            spec.query,
-            "--config",
-            runtime_config_path,
-            "--require-verify-pass",
-        ]
-
-    return [
-        sys.executable,
-        str(pipeline_path),
-        "--query",
-        spec.query,
-        "--config",
-        runtime_config_path,
-    ]
+    return control_plane.build_launch_command(spec, runtime_config_path, repo_root=REPO_ROOT)
 
 
 def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
-    run_id = f"tui-{uuid.uuid4().hex[:10]}"
-    run_dir = TUI_RUNS_DIR / run_id
-    config_path = run_dir / "config.json"
-    build_temp_runtime_config(BASE_CONFIG, spec, config_path)
-    return run_id, str(config_path)
-
-
-def _write_summary(path: Path, payload: dict) -> str:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    return str(path)
+    return control_plane.build_runtime_config(spec, base_config=BASE_CONFIG, tui_runs_dir=TUI_RUNS_DIR)
 
 
 def _persist_run_summary(run_id: str, payload: dict) -> str:
-    return _write_summary(TUI_RUNS_DIR / run_id / "tui_summary.json", payload)
+    return control_plane.persist_run_summary(run_id, payload, tui_runs_dir=TUI_RUNS_DIR)
 
 
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
-    return _write_summary(QUEUE_DIR / f"{queue_id}_summary.json", payload)
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 
 def _persist_turn_summary(packet_path: str, payload: dict) -> str:
-    packet_file = Path(packet_path)
-    summary_path = packet_file.with_name(f"{packet_file.stem}_summary.json")
-    return _write_summary(summary_path, payload)
+    return control_plane.persist_turn_summary(packet_path, payload)
 
 
 def _show_recent_artifacts(limit: int = 5) -> list[dict]:
-    rows: list[tuple[float, dict]] = []
-
-    if TUI_RUNS_DIR.exists():
-        run_dirs = [p for p in TUI_RUNS_DIR.iterdir() if p.is_dir() and p.name != "queue"]
-        for run_dir in run_dirs:
-            summary_path = run_dir / "tui_summary.json"
-            if summary_path.exists():
-                summary = json.loads(summary_path.read_text(encoding="utf-8"))
-                rows.append((summary_path.stat().st_mtime, {"kind": summary.get("kind", "run"), "path": str(summary_path), "summary": summary}))
-            else:
-                rows.append((run_dir.stat().st_mtime, {"kind": "run_dir", "path": str(run_dir)}))
-
-    if QUEUE_DIR.exists():
-        for path in QUEUE_DIR.glob("*_summary.json"):
-            summary = json.loads(path.read_text(encoding="utf-8"))
-            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "queue"), "path": str(path), "summary": summary}))
-
-    if EMAIL_TURNS_DIR.exists():
-        for path in EMAIL_TURNS_DIR.rglob("*_summary.json"):
-            summary = json.loads(path.read_text(encoding="utf-8"))
-            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "turn_packet"), "path": str(path), "summary": summary}))
-
-    rows.sort(key=lambda row: row[0], reverse=True)
-    return [row[1] for row in rows[:limit]]
+    return control_plane.list_recent_artifacts(limit=limit, tui_runs_dir=TUI_RUNS_DIR, queue_dir=QUEUE_DIR, email_turns_dir=EMAIL_TURNS_DIR)
 
 
 def _run_command(cmd: list[str]) -> dict:
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    payload: dict = {}
-    if result.stdout.strip():
-        try:
-            payload = json.loads(result.stdout.strip().splitlines()[-1])
-        except json.JSONDecodeError:
-            payload = {"raw_stdout": result.stdout.strip()}
-    payload["exit_code"] = result.returncode
-    if result.stderr.strip():
-        payload["stderr"] = result.stderr.strip()
-    return payload
+    return control_plane.run_command(cmd)
+
+
+def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
+    return control_plane.build_launch_summary(spec, run_id, config_path, command, payload)
 
 
 def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
@@ -258,13 +153,7 @@ def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, com
 
 
 def _queue_run_item(item: QueueItem) -> dict:
-    payload = _run_command(list(item.command))
-    return {
-        "run_id": payload.get("run_id"),
-        "exit_code": payload.get("exit_code", 1),
-        "reason": payload.get("verification_reason") or payload.get("stderr") or "run failed",
-        "artifacts": payload.get("artifacts"),
-    }
+    return control_plane.queue_run_item(item)
 
 
 def _generate_turn_packet() -> dict:
@@ -275,39 +164,38 @@ def _generate_turn_packet() -> dict:
     move = input("move/action: ").strip()
     actor = input("actor: ").strip() or "operator"
     fen = input("state.fen (optional): ").strip() or "startpos"
-
-    packet = build_turn_packet(
+    return control_plane.generate_turn_packet(
         game_id=game_id,
         turn=int(turn_raw),
-        actor=actor,
         move=move,
-        state={"fen": fen},
-        legal_next=[],
+        actor=actor,
+        fen=fen,
+        email_turns_dir=EMAIL_TURNS_DIR,
     )
-    out_dir = EMAIL_TURNS_DIR / game_id
-    out_path = out_dir / f"turn_{int(turn_raw)}.json"
-    attachment_path = serialize_turn_packet(packet, out_path)
-    bundle = build_email_bundle(packet, attachment_path)
-    summary = {
-        "kind": "turn_packet",
-        "status": "generated",
-        "packet_path": attachment_path,
-        "game_id": game_id,
-        "turn": int(turn_raw),
-    }
-    summary_path = _persist_turn_summary(attachment_path, summary)
-    return {
-        "packet_path": attachment_path,
-        "packet": packet,
-        "email_bundle": bundle,
-        "summary_path": summary_path,
-    }
 
 
 def _render_menu() -> None:
-    print("\nNEXUS TUI - VorteX research gauntlets")
+    print("\nNEXUS Cockpit v2 (fallback mode)")
     for row in MENU:
         print(row)
+
+
+def _draw_pane(stdscr, y: int, x: int, h: int, w: int, title: str, lines: list[str]) -> None:
+    stdscr.addstr(y, x, f"[{title}]"[: max(1, w - 1)])
+    for idx, line in enumerate(lines[: max(0, h - 1)]):
+        stdscr.addstr(y + idx + 1, x, line[: max(1, w - 1)])
+
+
+def _cockpit_actions_for_screen(screen: str) -> list[str]:
+    if screen == "Dashboard":
+        return ["3: Dry-Run Preview", "4: Launch One Run", "9: Exit"]
+    if screen == "Presets":
+        return ["1: New Gauntlet", "2: Load Preset", "3: Dry-Run Preview"]
+    if screen == "Queue":
+        return ["5: Enqueue", "6: Run Queue", "9: Exit"]
+    if screen == "Artifacts":
+        return ["7: Show Recent Artifacts", "9: Exit"]
+    return ["8: Generate Turn Packet", "9: Exit"]
 
 
 def _maybe_curses_menu() -> str:
@@ -325,17 +213,40 @@ def _maybe_curses_menu() -> str:
         current = 0
         while True:
             stdscr.clear()
-            stdscr.addstr(0, 0, "NEXUS TUI - VorteX research gauntlets")
-            for idx, row in enumerate(MENU):
-                prefix = "> " if idx == current else "  "
-                stdscr.addstr(idx + 2, 0, prefix + row)
+            height, width = stdscr.getmaxyx()
+            nav_w = max(18, width // 4)
+            detail_w = max(24, width // 4)
+            main_w = max(20, width - nav_w - detail_w - 2)
+            screen = SCREENS[current]
+
+            _draw_pane(stdscr, 0, 0, height - 2, nav_w, "Navigation", [f"{'>' if i == current else ' '} {name}" for i, name in enumerate(SCREENS)])
+            _draw_pane(stdscr, 0, nav_w + 1, height - 2, main_w, "Main", ["NEXUS Cockpit v2", f"Screen: {screen}"] + _cockpit_actions_for_screen(screen))
+            _draw_pane(
+                stdscr,
+                0,
+                nav_w + main_w + 2,
+                height - 2,
+                detail_w,
+                "Inspector",
+                ["Structured control-plane outputs", "Android-forward contract", "No terminal scraping required"],
+            )
+            footer = "UP/DOWN to navigate screens | 1-9 run action | ENTER default | q exit"
+            stdscr.addstr(height - 1, 0, footer[: max(1, width - 1)])
+
             key = stdscr.getch()
             if key in (curses.KEY_UP, ord("k")):
-                current = (current - 1) % len(MENU)
+                current = (current - 1) % len(SCREENS)
             elif key in (curses.KEY_DOWN, ord("j")):
-                current = (current + 1) % len(MENU)
+                current = (current + 1) % len(SCREENS)
+            elif ord("1") <= key <= ord("9"):
+                choice["value"] = chr(key)
+                break
             elif key in (10, 13):
-                choice["value"] = str(current + 1)
+                defaults = {"Dashboard": "3", "Presets": "2", "Queue": "6", "Artifacts": "7", "Turn Packets": "8"}
+                choice["value"] = defaults.get(screen, "9")
+                break
+            elif key in (ord("q"), 27):
+                choice["value"] = "9"
                 break
         return 0
 
@@ -381,15 +292,7 @@ def main() -> int:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
                 cmd = build_launch_command(spec, config_path)
-                summary = {
-                    "kind": "preview",
-                    "status": "preview",
-                    "run_id": run_id,
-                    "gauntlet_name": spec.gauntlet_name,
-                    "config_path": config_path,
-                    "command": cmd,
-                    "preview_command": cmd,
-                }
+                summary = control_plane.build_preview_summary(spec, run_id, config_path, cmd)
                 summary["summary_path"] = _persist_run_summary(run_id, summary)
                 _print_summary(summary)
             elif action == "4":
@@ -408,13 +311,7 @@ def main() -> int:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
                 command = build_launch_command(spec, config_path)
-                queue.append(
-                    QueueItem(
-                        gauntlet_name=spec.gauntlet_name,
-                        config_path=config_path,
-                        command=tuple(command),
-                    )
-                )
+                queue.append(QueueItem(gauntlet_name=spec.gauntlet_name, config_path=config_path, command=tuple(command)))
                 summary = {
                     "kind": "enqueue",
                     "status": "enqueued",
@@ -431,28 +328,8 @@ def main() -> int:
                     raise ValueError("Queue is empty")
                 stop_on_fail = _prompt_bool("stop_on_fail")
                 queue_id = f"queue-{uuid.uuid4().hex[:10]}"
-                manifest_path = write_queue_manifest(
-                    QUEUE_DIR / f"{queue_id}.json",
-                    queue_id=queue_id,
-                    stop_on_fail=stop_on_fail,
-                    items=queue,
-                )
-                receipt_path = process_queue(
-                    queue_items=queue,
-                    stop_on_fail=stop_on_fail,
-                    run_item=_queue_run_item,
-                    receipt_path=QUEUE_DIR / f"{queue_id}_receipt.json",
-                    queue_id=queue_id,
-                )
+                summary = control_plane.run_queue(queue, stop_on_fail=stop_on_fail, queue_id=queue_id, queue_dir=QUEUE_DIR, run_item=_queue_run_item)
                 queue.clear()
-                summary = {
-                    "kind": "queue",
-                    "status": "completed",
-                    "queue_id": queue_id,
-                    "manifest_path": manifest_path,
-                    "receipt_path": receipt_path,
-                }
-                summary["summary_path"] = _persist_queue_summary(queue_id, summary)
                 _print_summary(summary)
             elif action == "7":
                 _print_summary({"recent_artifacts": _show_recent_artifacts()})
