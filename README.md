@@ -127,6 +127,7 @@ Use `python scripts/run_nexus_tui.py --dump-state` to export a machine-readable 
 Fullscreen Cockpit v2 now supports the existing workflows directly (new/load/preview/launch/enqueue/run-queue/artifacts/turn-packet) while preserving fallback mode.
 Cockpit v2 also exposes a machine-readable action bridge via `--action-json` / `--action-file` for non-terminal clients.
 Versioned Cockpit contracts and receipt history are documented in `docs/nexus_cockpit_contract.md`.
+Use `scripts/validate_nexus_cockpit_contract.py` to validate snapshot/action/result/receipt artifacts against versioned cockpit schemas.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`
