@@ -27,22 +27,50 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    config = load_nexus_config(args.config)
-    result = run_research_pipeline(args.query, config)
-    artifacts = write_pipeline_artifacts(result, config.runtime.artifacts_dir)
-    envelope = {
-        "run_id": result.run_id,
-        "trace_id": result.trace_id,
-        "request_id": result.request_id,
-        "verification_pass": result.verification_pass,
-        "verification_reason": result.verification_reason,
-        "confidence": result.confidence,
-        "artifacts": artifacts,
+    base_envelope = {
+        "status": "fail",
+        "run_id": None,
+        "config_path": args.config,
+        "artifacts": None,
+        "verification_pass": None,
+        "verification_reason": None,
+        "reason": None,
+        "error_type": None,
     }
-    print(json.dumps(envelope, sort_keys=True))
-    if args.require_verify_pass and not result.verification_pass:
+    try:
+        config = load_nexus_config(args.config)
+        result = run_research_pipeline(args.query, config)
+        artifacts = write_pipeline_artifacts(result, config.runtime.artifacts_dir)
+        envelope = {
+            **base_envelope,
+            "status": "success",
+            "run_id": result.run_id,
+            "trace_id": result.trace_id,
+            "request_id": result.request_id,
+            "verification_pass": result.verification_pass,
+            "verification_reason": result.verification_reason,
+            "confidence": result.confidence,
+            "artifacts": artifacts,
+        }
+        if args.require_verify_pass and not result.verification_pass:
+            envelope["status"] = "fail"
+            envelope["reason"] = result.verification_reason or "verification failed"
+            envelope["error_type"] = "VerificationFailed"
+            print(json.dumps(envelope, sort_keys=True))
+            return 1
+        print(json.dumps(envelope, sort_keys=True))
+        return 0
+    except Exception as exc:
+        envelope = {
+            **base_envelope,
+            "reason": str(exc) or "governed smoke execution failed",
+            "error_type": exc.__class__.__name__,
+        }
+        stderr = getattr(exc, "stderr", None)
+        if isinstance(stderr, str) and stderr.strip():
+            envelope["stderr"] = stderr.strip()
+        print(json.dumps(envelope, sort_keys=True))
         return 1
-    return 0
 
 
 if __name__ == "__main__":
