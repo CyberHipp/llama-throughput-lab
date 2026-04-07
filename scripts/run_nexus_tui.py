@@ -73,8 +73,27 @@ def _preset_path(name: str) -> Path:
     return GAUNTLET_DIR / f"{name}.json"
 
 
+def _available_library_presets() -> list[str]:
+    if not PRESET_DIR.exists():
+        return []
+    return sorted(path.stem for path in PRESET_DIR.glob("*.json"))
+
+
+def _parse_source(source_raw: str) -> str:
+    source = source_raw.strip().lower()
+    if source not in {"library", "custom"}:
+        raise ValueError("Invalid source. Expected one of: library, custom")
+    return source
+
+
 def _load_library_preset(name: str) -> GauntletSpec:
-    payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+    preset_path = PRESET_DIR / f"{name}.json"
+    if not preset_path.exists():
+        available = _available_library_presets()
+        raise FileNotFoundError(
+            f"Library preset '{name}' not found. Available presets: {', '.join(available) if available else '(none)'}"
+        )
+    payload = json.loads(preset_path.read_text(encoding="utf-8"))
     if "query" not in payload:
         template = payload.get("query_template", "")
         topic = input("topic placeholder value: ").strip() or "default topic"
@@ -143,6 +162,27 @@ def _run_command(cmd: list[str]) -> dict:
     if result.stderr.strip():
         payload["stderr"] = result.stderr.strip()
     return payload
+
+
+def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
+    reason = payload.get("verification_reason") or payload.get("reason")
+    if not reason and payload.get("exit_code", 1) != 0:
+        reason = payload.get("stderr") or "run failed"
+    summary = {
+        "run_id": payload.get("run_id", run_id),
+        "gauntlet_name": spec.gauntlet_name,
+        "config_path": config_path,
+        "command": command,
+        "artifacts": payload.get("artifacts"),
+        "verification_pass": payload.get("verification_pass"),
+        "verification_reason": payload.get("verification_reason"),
+        "exit_code": payload.get("exit_code", 1),
+    }
+    if payload.get("stderr"):
+        summary["stderr"] = payload["stderr"]
+    if reason:
+        summary["reason"] = reason
+    return summary
 
 
 def _queue_run_item(item: QueueItem) -> dict:
@@ -240,7 +280,8 @@ def main() -> int:
                 save_gauntlet_spec(_preset_path(spec.gauntlet_name), spec)
                 _print_summary({"status": "saved", "gauntlet_name": spec.gauntlet_name})
             elif action == "2":
-                source = input("source [library/custom]: ").strip().lower() or "library"
+                source_raw = input("source [library/custom]: ")
+                source = _parse_source(source_raw)
                 if source == "custom":
                     name = input("preset name: ").strip()
                     spec = load_gauntlet_spec(_preset_path(name))
@@ -258,16 +299,9 @@ def main() -> int:
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
-                payload = _run_command(build_launch_command(spec, config_path))
-                _print_summary({
-                    "run_id": payload.get("run_id", run_id),
-                    "gauntlet_name": spec.gauntlet_name,
-                    "config_path": config_path,
-                    "artifacts": payload.get("artifacts"),
-                    "verification_pass": payload.get("verification_pass"),
-                    "verification_reason": payload.get("verification_reason"),
-                    "exit_code": payload.get("exit_code", 1),
-                })
+                command = build_launch_command(spec, config_path)
+                payload = _run_command(command)
+                _print_summary(_build_launch_summary(spec, run_id, config_path, command, payload))
             elif action == "5":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
@@ -310,7 +344,12 @@ def main() -> int:
             else:
                 raise ValueError(f"Unknown menu option: {action}")
         except Exception as exc:
-            _print_summary({"status": "error", "error": str(exc)})
+            error_payload = {"status": "error", "error": str(exc)}
+            if isinstance(exc, FileNotFoundError) and "Available presets:" in str(exc):
+                _, available_text = str(exc).split("Available presets:", maxsplit=1)
+                available = [item.strip() for item in available_text.split(",") if item.strip() and item.strip() != "(none)"]
+                error_payload["available_presets"] = available
+            _print_summary(error_payload)
 
 
 if __name__ == "__main__":
