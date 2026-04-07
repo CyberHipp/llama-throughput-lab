@@ -79,6 +79,21 @@ def _available_library_presets() -> list[str]:
     return sorted(path.stem for path in PRESET_DIR.glob("*.json"))
 
 
+def _library_preset_info() -> list[dict[str, str | None]]:
+    entries: list[dict[str, str | None]] = []
+    for name in _available_library_presets():
+        payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        entries.append(
+            {
+                "name": name,
+                "mode": payload.get("mode"),
+                "risk_level": payload.get("risk_level"),
+                "notes": payload.get("notes"),
+            }
+        )
+    return entries
+
+
 def _parse_source(source_raw: str) -> str:
     source = source_raw.strip().lower()
     if source not in {"library", "custom"}:
@@ -86,7 +101,20 @@ def _parse_source(source_raw: str) -> str:
     return source
 
 
-def _load_library_preset(name: str) -> GauntletSpec:
+def _resolve_library_selection(selection_raw: str, presets: list[dict[str, str | None]]) -> str:
+    selection = selection_raw.strip()
+    names = [row["name"] for row in presets]
+    if selection.isdigit():
+        index = int(selection)
+        if index < 1 or index > len(names):
+            raise ValueError(f"Library selection '{selection}' is out of range. Available presets: {', '.join(names)}")
+        return names[index - 1]
+    if selection in names:
+        return selection
+    raise FileNotFoundError(f"Library preset '{selection}' not found. Available presets: {', '.join(names)}")
+
+
+def _load_library_preset(name: str) -> tuple[GauntletSpec, dict[str, str | None]]:
     preset_path = PRESET_DIR / f"{name}.json"
     if not preset_path.exists():
         available = _available_library_presets()
@@ -107,7 +135,11 @@ def _load_library_preset(name: str) -> GauntletSpec:
         require_verify_pass=bool(payload["require_verify_pass"]),
     )
     spec.validate()
-    return spec
+    return spec, {
+        "mode": payload.get("mode"),
+        "risk_level": payload.get("risk_level"),
+        "notes": payload.get("notes"),
+    }
 
 
 def build_launch_command(spec: GauntletSpec, runtime_config_path: str) -> list[str]:
@@ -285,10 +317,16 @@ def main() -> int:
                 if source == "custom":
                     name = input("preset name: ").strip()
                     spec = load_gauntlet_spec(_preset_path(name))
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
                 else:
-                    name = input("library preset name: ").strip()
-                    spec = _load_library_preset(name)
-                _print_summary({"status": "loaded", "gauntlet_name": spec.gauntlet_name})
+                    presets = _library_preset_info()
+                    _print_summary({"status": "library_presets", "presets": presets})
+                    selection = input("library preset name or index: ").strip()
+                    name = _resolve_library_selection(selection, presets)
+                    spec, preset_meta = _load_library_preset(name)
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
+                    loaded_summary.update({key: value for key, value in preset_meta.items() if value is not None})
+                _print_summary(loaded_summary)
             elif action == "3":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
@@ -345,7 +383,7 @@ def main() -> int:
                 raise ValueError(f"Unknown menu option: {action}")
         except Exception as exc:
             error_payload = {"status": "error", "error": str(exc)}
-            if isinstance(exc, FileNotFoundError) and "Available presets:" in str(exc):
+            if "Available presets:" in str(exc):
                 _, available_text = str(exc).split("Available presets:", maxsplit=1)
                 available = [item.strip() for item in available_text.split(",") if item.strip() and item.strip() != "(none)"]
                 error_payload["available_presets"] = available

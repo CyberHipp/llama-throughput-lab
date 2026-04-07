@@ -5,7 +5,14 @@ from pathlib import Path
 from unittest import mock
 
 from llama_nexus_lab.gauntlet import GauntletSpec, build_temp_runtime_config, load_gauntlet_spec, save_gauntlet_spec
-from scripts.run_nexus_tui import _build_launch_summary, _load_library_preset, _parse_source, build_launch_command
+from scripts.run_nexus_tui import (
+    _build_launch_summary,
+    _library_preset_info,
+    _load_library_preset,
+    _parse_source,
+    _resolve_library_selection,
+    build_launch_command,
+)
 from scripts import run_nexus_tui
 
 
@@ -76,6 +83,37 @@ class NexusTuiTests(unittest.TestCase):
             _load_library_preset("__does_not_exist__")
         self.assertIn("Available presets:", str(ctx.exception))
 
+    def test_library_preset_helper_returns_known_presets(self):
+        presets = _library_preset_info()
+        names = [row["name"] for row in presets]
+        self.assertIn("vortex_fast_scan", names)
+
+    def test_library_select_by_exact_name(self):
+        presets = _library_preset_info()
+        selected = _resolve_library_selection("vortex_fast_scan", presets)
+        self.assertEqual(selected, "vortex_fast_scan")
+
+    def test_library_select_by_numeric_index(self):
+        presets = _library_preset_info()
+        selected = _resolve_library_selection("1", presets)
+        self.assertEqual(selected, presets[0]["name"])
+
+    def test_library_select_out_of_range_fails_closed(self):
+        presets = _library_preset_info()
+        with self.assertRaises(ValueError) as ctx:
+            _resolve_library_selection("99", presets)
+        self.assertIn("Available presets:", str(ctx.exception))
+
+    def test_loaded_summary_includes_metadata(self):
+        with mock.patch("builtins.input", return_value="llama throughput"):
+            spec, preset_meta = _load_library_preset("vortex_fast_scan")
+        summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
+        summary.update({key: value for key, value in preset_meta.items() if value is not None})
+        self.assertEqual(summary["gauntlet_name"], "vortex_fast_scan")
+        self.assertIn("mode", summary)
+        self.assertIn("risk_level", summary)
+        self.assertIn("notes", summary)
+
     def test_launch_summary_includes_stderr_command_on_failure(self):
         spec = GauntletSpec(
             gauntlet_name="fail",
@@ -97,7 +135,7 @@ class NexusTuiTests(unittest.TestCase):
             [
                 "2",  # menu: load preset
                 "library",
-                "vortex_fast_scan",
+                "4",
                 "llama throughput",
                 "3",  # menu: dry-run preview
                 "9",  # menu: exit
