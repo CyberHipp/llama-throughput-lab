@@ -59,6 +59,15 @@ class RuntimeConfig:
     retry_attempts: int
     retry_backoff_s: float
     stage_timeout_s: int
+    reasoner_adapter: "ReasonerAdapterConfig"
+
+
+@dataclass(frozen=True)
+class ReasonerAdapterConfig:
+    enabled: bool
+    base_url: str
+    model: str
+    timeout_s: int
 
 
 @dataclass(frozen=True)
