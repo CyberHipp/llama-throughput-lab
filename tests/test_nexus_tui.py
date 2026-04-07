@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from llama_nexus_lab.gauntlet import GauntletSpec, build_temp_runtime_config, load_gauntlet_spec, save_gauntlet_spec
-from scripts.run_nexus_tui import build_launch_command
+from scripts.run_nexus_tui import _build_launch_summary, _load_library_preset, _parse_source, build_launch_command
 
 
 class NexusTuiTests(unittest.TestCase):
@@ -64,6 +64,31 @@ class NexusTuiTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             spec.validate()
+
+    def test_invalid_source_input_rejected(self):
+        with self.assertRaises(ValueError):
+            _parse_source("anything-else")
+
+    def test_missing_library_preset_reports_available_list(self):
+        with self.assertRaises(FileNotFoundError) as ctx:
+            _load_library_preset("__does_not_exist__")
+        self.assertIn("Available presets:", str(ctx.exception))
+
+    def test_launch_summary_includes_stderr_command_on_failure(self):
+        spec = GauntletSpec(
+            gauntlet_name="fail",
+            query="test query",
+            max_search_intents=2,
+            strict_citation_required=True,
+            dry_run=True,
+            require_verify_pass=False,
+        )
+        payload = {"exit_code": 1, "stderr": "boom"}
+        cmd = ["python", "scripts/run_nexus_pipeline.py", "--query", "q"]
+        summary = _build_launch_summary(spec, "run-1", "config.json", cmd, payload)
+        self.assertEqual(summary["command"], cmd)
+        self.assertEqual(summary["stderr"], "boom")
+        self.assertEqual(summary["reason"], "boom")
 
 
 if __name__ == "__main__":
