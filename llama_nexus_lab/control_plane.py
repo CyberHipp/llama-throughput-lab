@@ -15,6 +15,7 @@ PRESET_DIR = REPO_ROOT / "configs/nexus/gauntlets/presets"
 TUI_RUNS_DIR = REPO_ROOT / "artifacts/nexus/tui_runs"
 QUEUE_DIR = TUI_RUNS_DIR / "queue"
 EMAIL_TURNS_DIR = REPO_ROOT / "artifacts/nexus/email_turns"
+COCKPIT_SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
 
 
 def available_library_presets(preset_dir: Path = PRESET_DIR) -> list[str]:
@@ -264,3 +265,79 @@ def run_queue(queue: list[QueueItem], stop_on_fail: bool, queue_id: str, queue_d
     }
     summary["summary_path"] = persist_queue_summary(queue_id, summary, queue_dir=queue_dir)
     return summary
+
+
+def build_dashboard_state(queue_items: list[QueueItem] | None = None, recent_limit: int = 5, tui_runs_dir: Path = TUI_RUNS_DIR, queue_dir: Path = QUEUE_DIR, email_turns_dir: Path = EMAIL_TURNS_DIR) -> dict:
+    recent = list_recent_artifacts(limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir)
+    queue_count = len(queue_items or [])
+    return {
+        "screen": "Dashboard",
+        "queue_size": queue_count,
+        "recent_count": len(recent),
+        "recent_kinds": [row.get("kind") for row in recent[:3]],
+        "last_recent": recent[0] if recent else None,
+    }
+
+
+def build_presets_state(preset_dir: Path = PRESET_DIR) -> dict:
+    presets = list_library_presets(preset_dir)
+    return {
+        "screen": "Presets",
+        "count": len(presets),
+        "presets": presets,
+    }
+
+
+def build_queue_state(queue_items: list[QueueItem] | None = None) -> dict:
+    items = queue_items or []
+    return {
+        "screen": "Queue",
+        "queue_size": len(items),
+        "items": [
+            {
+                "gauntlet_name": item.gauntlet_name,
+                "config_path": item.config_path,
+                "command": list(item.command),
+            }
+            for item in items
+        ],
+    }
+
+
+def build_artifacts_state(limit: int = 5, tui_runs_dir: Path = TUI_RUNS_DIR, queue_dir: Path = QUEUE_DIR, email_turns_dir: Path = EMAIL_TURNS_DIR) -> dict:
+    recent = list_recent_artifacts(limit=limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir)
+    return {
+        "screen": "Artifacts",
+        "count": len(recent),
+        "recent_artifacts": recent,
+    }
+
+
+def build_turn_packets_state(limit: int = 5, email_turns_dir: Path = EMAIL_TURNS_DIR) -> dict:
+    rows: list[dict] = []
+    if email_turns_dir.exists():
+        for path in sorted(email_turns_dir.rglob("turn_*_summary.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            rows.append({"path": str(path), "summary": summary})
+    return {
+        "screen": "Turn Packets",
+        "count": len(rows),
+        "turn_packets": rows,
+    }
+
+
+def build_cockpit_snapshot(queue_items: list[QueueItem] | None = None, preset_dir: Path = PRESET_DIR, tui_runs_dir: Path = TUI_RUNS_DIR, queue_dir: Path = QUEUE_DIR, email_turns_dir: Path = EMAIL_TURNS_DIR, recent_limit: int = 5) -> dict:
+    return {
+        "screens": COCKPIT_SCREENS,
+        "roots": {
+            "preset_dir": str(preset_dir),
+            "tui_runs_dir": str(tui_runs_dir),
+            "queue_dir": str(queue_dir),
+            "email_turns_dir": str(email_turns_dir),
+        },
+        "dashboard": build_dashboard_state(queue_items=queue_items, recent_limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir),
+        "presets": build_presets_state(preset_dir=preset_dir),
+        "queue": build_queue_state(queue_items=queue_items),
+        "artifacts": build_artifacts_state(limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir),
+        "turn_packets": build_turn_packets_state(limit=recent_limit, email_turns_dir=email_turns_dir),
+    }

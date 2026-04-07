@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -73,7 +74,7 @@ def _parse_source(source_raw: str) -> str:
     return source
 
 
-# Backward-compatible wrappers for tests
+# wrappers used by tests
 
 def _available_library_presets() -> list[str]:
     return control_plane.available_library_presets(PRESET_DIR)
@@ -91,7 +92,6 @@ def _load_library_preset(name: str) -> tuple[GauntletSpec, dict[str, str | None]
     preset_path = PRESET_DIR / f"{name}.json"
     if not preset_path.exists():
         return control_plane.load_library_preset(name, topic=None, preset_dir=PRESET_DIR)
-
     payload = json.loads(preset_path.read_text(encoding="utf-8"))
     topic = None
     if "query" not in payload:
@@ -114,6 +114,8 @@ def _persist_run_summary(run_id: str, payload: dict) -> str:
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 def _persist_turn_summary(packet_path: str, payload: dict) -> str:
     return control_plane.persist_turn_summary(packet_path, payload)
@@ -131,27 +133,6 @@ def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, com
     return control_plane.build_launch_summary(spec, run_id, config_path, command, payload)
 
 
-def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
-    reason = payload.get("verification_reason") or payload.get("reason")
-    if not reason and payload.get("exit_code", 1) != 0:
-        reason = payload.get("stderr") or "run failed"
-    summary = {
-        "run_id": payload.get("run_id", run_id),
-        "gauntlet_name": spec.gauntlet_name,
-        "config_path": config_path,
-        "command": command,
-        "artifacts": payload.get("artifacts"),
-        "verification_pass": payload.get("verification_pass"),
-        "verification_reason": payload.get("verification_reason"),
-        "exit_code": payload.get("exit_code", 1),
-    }
-    if payload.get("stderr"):
-        summary["stderr"] = payload["stderr"]
-    if reason:
-        summary["reason"] = reason
-    return summary
-
-
 def _queue_run_item(item: QueueItem) -> dict:
     return control_plane.queue_run_item(item)
 
@@ -164,12 +145,15 @@ def _generate_turn_packet() -> dict:
     move = input("move/action: ").strip()
     actor = input("actor: ").strip() or "operator"
     fen = input("state.fen (optional): ").strip() or "startpos"
-    return control_plane.generate_turn_packet(
-        game_id=game_id,
-        turn=int(turn_raw),
-        move=move,
-        actor=actor,
-        fen=fen,
+    return control_plane.generate_turn_packet(game_id=game_id, turn=int(turn_raw), move=move, actor=actor, fen=fen, email_turns_dir=EMAIL_TURNS_DIR)
+
+
+def _build_cockpit_snapshot(queue: list[QueueItem]) -> dict:
+    return control_plane.build_cockpit_snapshot(
+        queue_items=queue,
+        preset_dir=PRESET_DIR,
+        tui_runs_dir=TUI_RUNS_DIR,
+        queue_dir=QUEUE_DIR,
         email_turns_dir=EMAIL_TURNS_DIR,
     )
 
@@ -186,19 +170,44 @@ def _draw_pane(stdscr, y: int, x: int, h: int, w: int, title: str, lines: list[s
         stdscr.addstr(y + idx + 1, x, line[: max(1, w - 1)])
 
 
-def _cockpit_actions_for_screen(screen: str) -> list[str]:
+def _screen_main_lines(snapshot: dict, screen: str) -> list[str]:
     if screen == "Dashboard":
-        return ["3: Dry-Run Preview", "4: Launch One Run", "9: Exit"]
+        d = snapshot["dashboard"]
+        return [f"Queue size: {d['queue_size']}", f"Recent count: {d['recent_count']}", f"Recent kinds: {', '.join([k for k in d['recent_kinds'] if k]) or '(none)'}"]
     if screen == "Presets":
-        return ["1: New Gauntlet", "2: Load Preset", "3: Dry-Run Preview"]
+        presets = snapshot["presets"]["presets"][:6]
+        return [f"Preset count: {snapshot['presets']['count']}"] + [f"- {p['name']} ({p.get('mode') or 'n/a'})" for p in presets]
     if screen == "Queue":
-        return ["5: Enqueue", "6: Run Queue", "9: Exit"]
+        queue = snapshot["queue"]
+        lines = [f"Queued runs: {queue['queue_size']}"]
+        lines += [f"- {item['gauntlet_name']}" for item in queue["items"][:5]]
+        return lines
     if screen == "Artifacts":
-        return ["7: Show Recent Artifacts", "9: Exit"]
-    return ["8: Generate Turn Packet", "9: Exit"]
+        artifacts = snapshot["artifacts"]["recent_artifacts"][:5]
+        return [f"Recent artifacts: {snapshot['artifacts']['count']}"] + [f"- {row.get('kind')}" for row in artifacts]
+    turns = snapshot["turn_packets"]["turn_packets"][:5]
+    return [f"Turn packets: {snapshot['turn_packets']['count']}"] + [f"- {row['summary'].get('game_id', 'unknown')}#{row['summary'].get('turn', '?')}" for row in turns]
 
 
-def _maybe_curses_menu() -> str:
+def _screen_inspector_lines(snapshot: dict, screen: str) -> list[str]:
+    if screen == "Dashboard":
+        last = snapshot["dashboard"].get("last_recent")
+        if not last:
+            return ["No recent activity"]
+        return ["Latest artifact:", last.get("kind", "unknown"), last.get("path", "")]
+    if screen == "Presets":
+        first = snapshot["presets"]["presets"][0] if snapshot["presets"]["presets"] else None
+        if not first:
+            return ["No presets found"]
+        return [f"name={first['name']}", f"mode={first.get('mode')}", f"risk={first.get('risk_level')}"]
+    if screen == "Queue":
+        return ["Queue state is in-memory", f"items={snapshot['queue']['queue_size']}", "Use 5/6 to enqueue/run"]
+    if screen == "Artifacts":
+        return ["Structured rows from", snapshot["roots"]["tui_runs_dir"], snapshot["roots"]["email_turns_dir"]]
+    return ["Turn packet summaries", snapshot["roots"]["email_turns_dir"], "Generated via action 8"]
+
+
+def _maybe_curses_menu(queue: list[QueueItem]) -> str:
     if not sys.stdin.isatty() or os.environ.get("TERM") in {None, "dumb"}:
         return input("Choose menu option [1-9]: ").strip()
     try:
@@ -212,25 +221,20 @@ def _maybe_curses_menu() -> str:
         curses.curs_set(0)
         current = 0
         while True:
+            snapshot = _build_cockpit_snapshot(queue)
+            screen = SCREENS[current]
+
             stdscr.clear()
             height, width = stdscr.getmaxyx()
             nav_w = max(18, width // 4)
             detail_w = max(24, width // 4)
             main_w = max(20, width - nav_w - detail_w - 2)
-            screen = SCREENS[current]
 
-            _draw_pane(stdscr, 0, 0, height - 2, nav_w, "Navigation", [f"{'>' if i == current else ' '} {name}" for i, name in enumerate(SCREENS)])
-            _draw_pane(stdscr, 0, nav_w + 1, height - 2, main_w, "Main", ["NEXUS Cockpit v2", f"Screen: {screen}"] + _cockpit_actions_for_screen(screen))
-            _draw_pane(
-                stdscr,
-                0,
-                nav_w + main_w + 2,
-                height - 2,
-                detail_w,
-                "Inspector",
-                ["Structured control-plane outputs", "Android-forward contract", "No terminal scraping required"],
-            )
-            footer = "UP/DOWN to navigate screens | 1-9 run action | ENTER default | q exit"
+            nav_lines = [f"{'>' if i == current else ' '} {name}" for i, name in enumerate(SCREENS)]
+            _draw_pane(stdscr, 0, 0, height - 2, nav_w, "Navigation", nav_lines)
+            _draw_pane(stdscr, 0, nav_w + 1, height - 2, main_w, f"Main: {screen}", _screen_main_lines(snapshot, screen))
+            _draw_pane(stdscr, 0, nav_w + main_w + 2, height - 2, detail_w, "Inspector", _screen_inspector_lines(snapshot, screen))
+            footer = "UP/DOWN screens | 1-9 run action | ENTER default | q exit | state is structured"
             stdscr.addstr(height - 1, 0, footer[: max(1, width - 1)])
 
             key = stdscr.getch()
@@ -258,13 +262,21 @@ def _print_summary(summary: dict) -> None:
     print(json.dumps(summary, sort_keys=True))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="NEXUS Cockpit v2")
+    parser.add_argument("--dump-state", action="store_true", help="Print machine-readable cockpit state snapshot and exit")
+    args = parser.parse_args(argv or [])
+
     spec: GauntletSpec | None = None
     queue: list[QueueItem] = []
 
+    if args.dump_state:
+        _print_summary(_build_cockpit_snapshot(queue))
+        return 0
+
     while True:
         _render_menu()
-        action = _maybe_curses_menu()
+        action = _maybe_curses_menu(queue)
 
         try:
             if action == "1":
@@ -350,4 +362,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

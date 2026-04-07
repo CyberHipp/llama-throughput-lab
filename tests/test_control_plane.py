@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from llama_nexus_lab import control_plane
-from llama_nexus_lab.gauntlet import GauntletSpec
+from llama_nexus_lab.gauntlet import GauntletSpec, QueueItem
 
 
 class ControlPlaneTests(unittest.TestCase):
@@ -79,6 +79,42 @@ class ControlPlaneTests(unittest.TestCase):
             payload = control_plane.run_command(["python", "x"])
         self.assertEqual(payload["ok"], True)
         self.assertEqual(payload["exit_code"], 0)
+
+    def test_cockpit_state_builders_and_snapshot_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            preset_dir = base / "presets"
+            preset_dir.mkdir(parents=True, exist_ok=True)
+            (preset_dir / "p1.json").write_text(json.dumps({
+                "gauntlet_name": "p1",
+                "query": "q",
+                "max_search_intents": 1,
+                "strict_citation_required": True,
+                "dry_run": True,
+                "require_verify_pass": False,
+            }), encoding="utf-8")
+            runs = base / "runs"
+            queue_dir = runs / "queue"
+            turns = base / "turns"
+            (runs / "r1").mkdir(parents=True, exist_ok=True)
+            queue_dir.mkdir(parents=True, exist_ok=True)
+            (turns / "g1").mkdir(parents=True, exist_ok=True)
+            (runs / "r1" / "tui_summary.json").write_text(json.dumps({"kind": "preview", "run_id": "r1"}), encoding="utf-8")
+            (turns / "g1" / "turn_1_summary.json").write_text(json.dumps({"kind": "turn_packet", "game_id": "g1", "turn": 1}), encoding="utf-8")
+
+            q = [QueueItem(gauntlet_name="g", config_path="cfg.json", command=("python", "run"))]
+            snapshot = control_plane.build_cockpit_snapshot(
+                queue_items=q,
+                preset_dir=preset_dir,
+                tui_runs_dir=runs,
+                queue_dir=queue_dir,
+                email_turns_dir=turns,
+            )
+        self.assertIn("screens", snapshot)
+        self.assertIn("dashboard", snapshot)
+        self.assertEqual(snapshot["queue"]["queue_size"], 1)
+        self.assertGreaterEqual(snapshot["presets"]["count"], 1)
+        self.assertIn("recent_artifacts", snapshot["artifacts"])
 
 
 if __name__ == "__main__":

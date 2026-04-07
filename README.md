@@ -123,6 +123,7 @@ python scripts/run_nexus_tui.py
 
 See `docs/nexus_tui.md` for preset format, menu actions, and non-goals.
 Cockpit v2 remains terminal-first; future Android integrations should consume structured control-plane outputs rather than terminal text scraping.
+Use `python scripts/run_nexus_tui.py --dump-state` to export a machine-readable cockpit snapshot for non-terminal clients.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`

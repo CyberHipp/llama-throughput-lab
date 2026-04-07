@@ -134,6 +134,19 @@ class NexusTuiTests(unittest.TestCase):
         self.assertEqual(summary["stderr"], "boom")
         self.assertEqual(summary["reason"], "boom")
 
+
+    def test_dump_state_returns_machine_readable_snapshot(self):
+        with mock.patch("builtins.print") as mock_print:
+            exit_code = run_nexus_tui.main(["--dump-state"])
+        self.assertEqual(exit_code, 0)
+        rendered = mock_print.call_args[0][0]
+        payload = json.loads(rendered)
+        self.assertIn("screens", payload)
+        self.assertIn("presets", payload)
+        self.assertIn("queue", payload)
+        self.assertIn("artifacts", payload)
+        self.assertIn("turn_packets", payload)
+
     def test_non_interactive_fallback_smoke_preview(self):
         inputs = iter(
             [
