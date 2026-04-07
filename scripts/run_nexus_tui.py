@@ -36,6 +36,8 @@ MENU = [
 ]
 SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
 
+SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
+
 
 class CockpitState(dict):
     pass
@@ -129,6 +131,8 @@ def _persist_run_summary(run_id: str, payload: dict) -> str:
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 def _persist_turn_summary(packet_path: str, payload: dict) -> str:
     return control_plane.persist_turn_summary(packet_path, payload)
@@ -411,6 +415,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except Exception:
             pass
+
+    if args.dump_state:
+        _print_summary(_build_cockpit_snapshot(queue))
+        return 0
 
     while True:
         _render_menu()
