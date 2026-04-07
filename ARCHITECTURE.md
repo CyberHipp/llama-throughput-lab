@@ -192,3 +192,12 @@ This follow-up keeps scope narrow and operational:
 - persist trace artifact metadata (`llama_nexus_lab/runtime.py`) so run receipts and artifact paths are coherently linked by `trace_id`/`request_id`.
 
 No benchmark topology behavior or launcher UX was removed in this pass.
+
+## NEXUS TUI phase 2 (presets, queue, email-turn protocol)
+
+This phase remains bounded and operator-facing:
+- preset library under `configs/nexus/gauntlets/presets/` for reproducible gauntlet templates,
+- queue mode for sequential execution with explicit `stop_on_fail` behavior and deterministic manifest/receipt artifacts,
+- transport-agnostic email-turn packet adapter (`email-turn-v1`) for turn-based workflows without coupling to live mail providers.
+
+Non-goals remain unchanged: no background daemon scheduling, no external email transport integration, and no game-engine logic.

@@ -1,0 +1,11 @@
+{
+  "gauntlet_name": "gauntlet_balanced",
+  "query_template": "Balanced synthesis for {topic} with concise decision support.",
+  "max_search_intents": 6,
+  "strict_citation_required": true,
+  "dry_run": false,
+  "require_verify_pass": false,
+  "mode": "balanced",
+  "risk_level": "medium",
+  "notes": "General purpose day-to-day operator preset."
+}

@@ -1,0 +1,11 @@
+{
+  "gauntlet_name": "vortex_fast_scan",
+  "query_template": "Summarize top risks for {topic} in 5 bullets.",
+  "max_search_intents": 3,
+  "strict_citation_required": false,
+  "dry_run": true,
+  "require_verify_pass": false,
+  "mode": "fast_scan",
+  "risk_level": "low",
+  "notes": "Quick bounded scan for triage."
+}

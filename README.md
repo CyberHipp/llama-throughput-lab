@@ -123,6 +123,11 @@ python scripts/run_nexus_tui.py
 
 See `docs/nexus_tui.md` for preset format, menu actions, and non-goals.
 
+Additional operator docs:
+- `docs/nexus_gauntlet_presets.md`
+- `docs/nexus_queue_mode.md`
+- `docs/email_turn_adapter.md`
+
 ## Running llama-nexus-lab pipeline
 
 Dry-run (no network required):
