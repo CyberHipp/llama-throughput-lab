@@ -114,6 +114,8 @@ def _persist_run_summary(run_id: str, payload: dict) -> str:
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 def _persist_turn_summary(packet_path: str, payload: dict) -> str:
     return control_plane.persist_turn_summary(packet_path, payload)
