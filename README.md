@@ -169,3 +169,5 @@ GitHub Actions runs:
 - security pattern scan (scripts/security_check.py)
 
 See `.github/workflows/ci.yml` for the exact workflow.
+
+Bootstrap details: `docs/REPOSITORY_BOOTSTRAP_GUIDE.md`.
