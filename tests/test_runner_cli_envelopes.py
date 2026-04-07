@@ -73,6 +73,23 @@ class RunnerCliEnvelopeTests(unittest.TestCase):
         self.assertEqual(rendered["run_id"], "run-2")
         self.assertEqual(rendered["error_type"], None)
 
+    def test_pipeline_live_reasoner_failure_envelope_is_machine_readable(self):
+        args = argparse.Namespace(query="q", config="configs/nexus/default.json")
+        fake_config = SimpleNamespace(runtime=SimpleNamespace(artifacts_dir="artifacts/nexus"))
+        with mock.patch("scripts.run_nexus_pipeline.parse_args", return_value=args):
+            with mock.patch("scripts.run_nexus_pipeline.load_nexus_config", return_value=fake_config):
+                with mock.patch(
+                    "scripts.run_nexus_pipeline.run_research_pipeline",
+                    side_effect=RuntimeError("reason_stage_timeout"),
+                ):
+                    with mock.patch("builtins.print") as mock_print:
+                        exit_code = run_nexus_pipeline.main()
+        self.assertEqual(exit_code, 1)
+        rendered = json.loads(mock_print.call_args[0][0])
+        self.assertEqual(rendered["status"], "fail")
+        self.assertIn("reason_stage_timeout", rendered["reason"])
+        self.assertEqual(rendered["error_type"], "RuntimeError")
+
 
 if __name__ == "__main__":
     unittest.main()
