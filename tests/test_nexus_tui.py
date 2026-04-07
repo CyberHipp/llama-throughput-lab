@@ -7,10 +7,14 @@ from unittest import mock
 from llama_nexus_lab.gauntlet import GauntletSpec, build_temp_runtime_config, load_gauntlet_spec, save_gauntlet_spec
 from scripts.run_nexus_tui import (
     _build_launch_summary,
+    _persist_queue_summary,
+    _persist_run_summary,
+    _persist_turn_summary,
     _library_preset_info,
     _load_library_preset,
     _parse_source,
     _resolve_library_selection,
+    _show_recent_artifacts,
     build_launch_command,
 )
 from scripts import run_nexus_tui
@@ -159,6 +163,85 @@ class NexusTuiTests(unittest.TestCase):
         self.assertIn("gauntlet_name", preview)
         self.assertIn("config_path", preview)
         self.assertIn("preview_command", preview)
+
+    def test_preview_summary_file_is_written(self):
+        payload = {
+            "kind": "preview",
+            "status": "preview",
+            "run_id": "tui-preview-1",
+            "gauntlet_name": "vortex_fast_scan",
+            "config_path": "artifacts/nexus/tui_runs/tui-preview-1/config.json",
+            "command": ["python", "scripts/run_nexus_pipeline.py"],
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(run_nexus_tui, "TUI_RUNS_DIR", Path(tmp_dir)):
+                path = _persist_run_summary("tui-preview-1", payload)
+                self.assertTrue(Path(path).exists())
+                saved = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.assertEqual(saved["kind"], "preview")
+        self.assertEqual(saved["run_id"], "tui-preview-1")
+
+    def test_launch_summary_file_is_written_with_expected_keys(self):
+        spec = GauntletSpec(
+            gauntlet_name="launch",
+            query="q",
+            max_search_intents=2,
+            strict_citation_required=False,
+            dry_run=True,
+            require_verify_pass=False,
+        )
+        payload = {"exit_code": 1, "stderr": "boom"}
+        command = ["python", "scripts/run_nexus_pipeline.py"]
+        summary = _build_launch_summary(spec, "tui-launch-1", "config.json", command, payload)
+        summary["kind"] = "launch"
+        summary["status"] = "fail"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(run_nexus_tui, "TUI_RUNS_DIR", Path(tmp_dir)):
+                path = _persist_run_summary("tui-launch-1", summary)
+                saved = json.loads(Path(path).read_text(encoding="utf-8"))
+        for key in ("kind", "status", "run_id", "config_path", "command", "stderr", "reason"):
+            self.assertIn(key, saved)
+
+    def test_queue_summary_file_is_written(self):
+        payload = {"kind": "queue", "status": "completed", "queue_id": "queue-123", "manifest_path": "m.json", "receipt_path": "r.json"}
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            queue_dir = Path(tmp_dir) / "queue"
+            with mock.patch.object(run_nexus_tui, "QUEUE_DIR", queue_dir):
+                path = _persist_queue_summary("queue-123", payload)
+                self.assertTrue(Path(path).exists())
+                saved = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.assertEqual(saved["queue_id"], "queue-123")
+
+    def test_turn_packet_summary_file_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            packet_path = Path(tmp_dir) / "game-1" / "turn_1.json"
+            packet_path.parent.mkdir(parents=True, exist_ok=True)
+            packet_path.write_text("{}", encoding="utf-8")
+            summary_path = _persist_turn_summary(str(packet_path), {"kind": "turn_packet", "status": "generated", "packet_path": str(packet_path)})
+            self.assertTrue(Path(summary_path).exists())
+            saved = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+        self.assertEqual(saved["kind"], "turn_packet")
+
+    def test_recent_artifacts_returns_structured_summaries(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            runs = base / "tui_runs"
+            queue = runs / "queue"
+            turns = base / "email_turns"
+            (runs / "tui-1").mkdir(parents=True, exist_ok=True)
+            (turns / "game-1").mkdir(parents=True, exist_ok=True)
+            (queue).mkdir(parents=True, exist_ok=True)
+            (runs / "tui-1" / "tui_summary.json").write_text(json.dumps({"kind": "preview", "run_id": "tui-1"}), encoding="utf-8")
+            (queue / "queue-1_summary.json").write_text(json.dumps({"kind": "queue", "queue_id": "queue-1"}), encoding="utf-8")
+            (turns / "game-1" / "turn_1_summary.json").write_text(json.dumps({"kind": "turn_packet", "packet_path": "x"}), encoding="utf-8")
+            with mock.patch.object(run_nexus_tui, "TUI_RUNS_DIR", runs):
+                with mock.patch.object(run_nexus_tui, "QUEUE_DIR", queue):
+                    with mock.patch.object(run_nexus_tui, "EMAIL_TURNS_DIR", turns):
+                        recent = _show_recent_artifacts(limit=10)
+        self.assertGreaterEqual(len(recent), 3)
+        self.assertTrue(any(row.get("summary", {}).get("kind") == "preview" for row in recent))
+        self.assertTrue(any(row.get("summary", {}).get("kind") == "queue" for row in recent))
+        self.assertTrue(any(row.get("summary", {}).get("kind") == "turn_packet" for row in recent))
 
 
 if __name__ == "__main__":

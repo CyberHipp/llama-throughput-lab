@@ -175,11 +175,51 @@ def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
     return run_id, str(config_path)
 
 
-def _show_recent_artifacts(limit: int = 5) -> list[str]:
-    if not TUI_RUNS_DIR.exists():
-        return []
-    dirs = sorted([p for p in TUI_RUNS_DIR.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True)
-    return [str(path) for path in dirs[:limit]]
+def _write_summary(path: Path, payload: dict) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def _persist_run_summary(run_id: str, payload: dict) -> str:
+    return _write_summary(TUI_RUNS_DIR / run_id / "tui_summary.json", payload)
+
+
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return _write_summary(QUEUE_DIR / f"{queue_id}_summary.json", payload)
+
+
+def _persist_turn_summary(packet_path: str, payload: dict) -> str:
+    packet_file = Path(packet_path)
+    summary_path = packet_file.with_name(f"{packet_file.stem}_summary.json")
+    return _write_summary(summary_path, payload)
+
+
+def _show_recent_artifacts(limit: int = 5) -> list[dict]:
+    rows: list[tuple[float, dict]] = []
+
+    if TUI_RUNS_DIR.exists():
+        run_dirs = [p for p in TUI_RUNS_DIR.iterdir() if p.is_dir() and p.name != "queue"]
+        for run_dir in run_dirs:
+            summary_path = run_dir / "tui_summary.json"
+            if summary_path.exists():
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                rows.append((summary_path.stat().st_mtime, {"kind": summary.get("kind", "run"), "path": str(summary_path), "summary": summary}))
+            else:
+                rows.append((run_dir.stat().st_mtime, {"kind": "run_dir", "path": str(run_dir)}))
+
+    if QUEUE_DIR.exists():
+        for path in QUEUE_DIR.glob("*_summary.json"):
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "queue"), "path": str(path), "summary": summary}))
+
+    if EMAIL_TURNS_DIR.exists():
+        for path in EMAIL_TURNS_DIR.rglob("*_summary.json"):
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "turn_packet"), "path": str(path), "summary": summary}))
+
+    rows.sort(key=lambda row: row[0], reverse=True)
+    return [row[1] for row in rows[:limit]]
 
 
 def _run_command(cmd: list[str]) -> dict:
@@ -248,10 +288,19 @@ def _generate_turn_packet() -> dict:
     out_path = out_dir / f"turn_{int(turn_raw)}.json"
     attachment_path = serialize_turn_packet(packet, out_path)
     bundle = build_email_bundle(packet, attachment_path)
+    summary = {
+        "kind": "turn_packet",
+        "status": "generated",
+        "packet_path": attachment_path,
+        "game_id": game_id,
+        "turn": int(turn_raw),
+    }
+    summary_path = _persist_turn_summary(attachment_path, summary)
     return {
         "packet_path": attachment_path,
         "packet": packet,
         "email_bundle": bundle,
+        "summary_path": summary_path,
     }
 
 
@@ -332,26 +381,51 @@ def main() -> int:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
                 cmd = build_launch_command(spec, config_path)
-                _print_summary({"run_id": run_id, "gauntlet_name": spec.gauntlet_name, "config_path": config_path, "preview_command": cmd})
+                summary = {
+                    "kind": "preview",
+                    "status": "preview",
+                    "run_id": run_id,
+                    "gauntlet_name": spec.gauntlet_name,
+                    "config_path": config_path,
+                    "command": cmd,
+                    "preview_command": cmd,
+                }
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "4":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
                 command = build_launch_command(spec, config_path)
                 payload = _run_command(command)
-                _print_summary(_build_launch_summary(spec, run_id, config_path, command, payload))
+                summary = _build_launch_summary(spec, run_id, config_path, command, payload)
+                summary["kind"] = "launch"
+                summary["status"] = "success" if summary.get("exit_code", 1) == 0 else "fail"
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "5":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
+                command = build_launch_command(spec, config_path)
                 queue.append(
                     QueueItem(
                         gauntlet_name=spec.gauntlet_name,
                         config_path=config_path,
-                        command=tuple(build_launch_command(spec, config_path)),
+                        command=tuple(command),
                     )
                 )
-                _print_summary({"status": "enqueued", "queue_size": len(queue), "run_id": run_id})
+                summary = {
+                    "kind": "enqueue",
+                    "status": "enqueued",
+                    "queue_size": len(queue),
+                    "run_id": run_id,
+                    "gauntlet_name": spec.gauntlet_name,
+                    "config_path": config_path,
+                    "command": command,
+                }
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "6":
                 if not queue:
                     raise ValueError("Queue is empty")
@@ -371,7 +445,15 @@ def main() -> int:
                     queue_id=queue_id,
                 )
                 queue.clear()
-                _print_summary({"queue_id": queue_id, "manifest_path": manifest_path, "receipt_path": receipt_path})
+                summary = {
+                    "kind": "queue",
+                    "status": "completed",
+                    "queue_id": queue_id,
+                    "manifest_path": manifest_path,
+                    "receipt_path": receipt_path,
+                }
+                summary["summary_path"] = _persist_queue_summary(queue_id, summary)
+                _print_summary(summary)
             elif action == "7":
                 _print_summary({"recent_artifacts": _show_recent_artifacts()})
             elif action == "8":
