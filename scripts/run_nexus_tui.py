@@ -79,6 +79,7 @@ def _save_state(state: CockpitState) -> str:
     }
     return control_plane.save_cockpit_session_state(payload, state_path=SESSION_PATH)
 
+SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
 
 def _prompt_bool(label: str, prompt: Callable[[str], str] | None = None) -> bool:
     prompt = prompt or input
@@ -138,6 +139,8 @@ def _load_library_preset(name: str, prompt: Callable[[str], str] | None = None) 
 def build_launch_command(spec: GauntletSpec, runtime_config_path: str) -> list[str]:
     return control_plane.build_launch_command(spec, runtime_config_path, repo_root=REPO_ROOT)
 
+def _persist_run_summary(run_id: str, payload: dict) -> str:
+    return control_plane.persist_run_summary(run_id, payload, tui_runs_dir=TUI_RUNS_DIR)
 
 def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
     return control_plane.build_runtime_config(spec, base_config=BASE_CONFIG, tui_runs_dir=TUI_RUNS_DIR)
@@ -146,6 +149,11 @@ def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
 def _persist_run_summary(run_id: str, payload: dict) -> str:
     return control_plane.persist_run_summary(run_id, payload, tui_runs_dir=TUI_RUNS_DIR)
 
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
+
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
