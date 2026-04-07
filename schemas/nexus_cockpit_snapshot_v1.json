@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NEXUS Cockpit Snapshot v1",
+  "type": "object",
+  "required": ["snapshot_version", "screens", "roots", "cockpit", "dashboard", "presets", "queue", "artifacts", "turn_packets"],
+  "properties": {
+    "snapshot_version": {"const": "nexus-cockpit-snapshot-v1"},
+    "screens": {"type": "array", "items": {"type": "string"}},
+    "roots": {"type": "object"},
+    "cockpit": {"type": "object"},
+    "dashboard": {"type": "object"},
+    "presets": {"type": "object"},
+    "queue": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "turn_packets": {"type": "object"}
+  },
+  "additionalProperties": true
+}

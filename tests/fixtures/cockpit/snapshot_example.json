@@ -1,0 +1,19 @@
+{
+  "snapshot_version": "nexus-cockpit-snapshot-v1",
+  "screens": ["Dashboard","Presets","Queue","Artifacts","Turn Packets"],
+  "roots": {},
+  "cockpit": {
+    "session_state_path": "artifacts/nexus/cockpit_state/session.json",
+    "selected_screen": "Dashboard",
+    "selected_indices": {},
+    "loaded_gauntlet": null,
+    "last_action_result": null,
+    "last_error": null,
+    "last_action_receipt_path": null
+  },
+  "dashboard": {},
+  "presets": {},
+  "queue": {},
+  "artifacts": {},
+  "turn_packets": {}
+}
