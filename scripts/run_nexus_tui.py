@@ -73,8 +73,55 @@ def _preset_path(name: str) -> Path:
     return GAUNTLET_DIR / f"{name}.json"
 
 
-def _load_library_preset(name: str) -> GauntletSpec:
-    payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+def _available_library_presets() -> list[str]:
+    if not PRESET_DIR.exists():
+        return []
+    return sorted(path.stem for path in PRESET_DIR.glob("*.json"))
+
+
+def _library_preset_info() -> list[dict[str, str | None]]:
+    entries: list[dict[str, str | None]] = []
+    for name in _available_library_presets():
+        payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        entries.append(
+            {
+                "name": name,
+                "mode": payload.get("mode"),
+                "risk_level": payload.get("risk_level"),
+                "notes": payload.get("notes"),
+            }
+        )
+    return entries
+
+
+def _parse_source(source_raw: str) -> str:
+    source = source_raw.strip().lower()
+    if source not in {"library", "custom"}:
+        raise ValueError("Invalid source. Expected one of: library, custom")
+    return source
+
+
+def _resolve_library_selection(selection_raw: str, presets: list[dict[str, str | None]]) -> str:
+    selection = selection_raw.strip()
+    names = [row["name"] for row in presets]
+    if selection.isdigit():
+        index = int(selection)
+        if index < 1 or index > len(names):
+            raise ValueError(f"Library selection '{selection}' is out of range. Available presets: {', '.join(names)}")
+        return names[index - 1]
+    if selection in names:
+        return selection
+    raise FileNotFoundError(f"Library preset '{selection}' not found. Available presets: {', '.join(names)}")
+
+
+def _load_library_preset(name: str) -> tuple[GauntletSpec, dict[str, str | None]]:
+    preset_path = PRESET_DIR / f"{name}.json"
+    if not preset_path.exists():
+        available = _available_library_presets()
+        raise FileNotFoundError(
+            f"Library preset '{name}' not found. Available presets: {', '.join(available) if available else '(none)'}"
+        )
+    payload = json.loads(preset_path.read_text(encoding="utf-8"))
     if "query" not in payload:
         template = payload.get("query_template", "")
         topic = input("topic placeholder value: ").strip() or "default topic"
@@ -88,7 +135,11 @@ def _load_library_preset(name: str) -> GauntletSpec:
         require_verify_pass=bool(payload["require_verify_pass"]),
     )
     spec.validate()
-    return spec
+    return spec, {
+        "mode": payload.get("mode"),
+        "risk_level": payload.get("risk_level"),
+        "notes": payload.get("notes"),
+    }
 
 
 def build_launch_command(spec: GauntletSpec, runtime_config_path: str) -> list[str]:
@@ -124,11 +175,51 @@ def _build_runtime_config(spec: GauntletSpec) -> tuple[str, str]:
     return run_id, str(config_path)
 
 
-def _show_recent_artifacts(limit: int = 5) -> list[str]:
-    if not TUI_RUNS_DIR.exists():
-        return []
-    dirs = sorted([p for p in TUI_RUNS_DIR.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True)
-    return [str(path) for path in dirs[:limit]]
+def _write_summary(path: Path, payload: dict) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def _persist_run_summary(run_id: str, payload: dict) -> str:
+    return _write_summary(TUI_RUNS_DIR / run_id / "tui_summary.json", payload)
+
+
+def _persist_queue_summary(queue_id: str, payload: dict) -> str:
+    return _write_summary(QUEUE_DIR / f"{queue_id}_summary.json", payload)
+
+
+def _persist_turn_summary(packet_path: str, payload: dict) -> str:
+    packet_file = Path(packet_path)
+    summary_path = packet_file.with_name(f"{packet_file.stem}_summary.json")
+    return _write_summary(summary_path, payload)
+
+
+def _show_recent_artifacts(limit: int = 5) -> list[dict]:
+    rows: list[tuple[float, dict]] = []
+
+    if TUI_RUNS_DIR.exists():
+        run_dirs = [p for p in TUI_RUNS_DIR.iterdir() if p.is_dir() and p.name != "queue"]
+        for run_dir in run_dirs:
+            summary_path = run_dir / "tui_summary.json"
+            if summary_path.exists():
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                rows.append((summary_path.stat().st_mtime, {"kind": summary.get("kind", "run"), "path": str(summary_path), "summary": summary}))
+            else:
+                rows.append((run_dir.stat().st_mtime, {"kind": "run_dir", "path": str(run_dir)}))
+
+    if QUEUE_DIR.exists():
+        for path in QUEUE_DIR.glob("*_summary.json"):
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "queue"), "path": str(path), "summary": summary}))
+
+    if EMAIL_TURNS_DIR.exists():
+        for path in EMAIL_TURNS_DIR.rglob("*_summary.json"):
+            summary = json.loads(path.read_text(encoding="utf-8"))
+            rows.append((path.stat().st_mtime, {"kind": summary.get("kind", "turn_packet"), "path": str(path), "summary": summary}))
+
+    rows.sort(key=lambda row: row[0], reverse=True)
+    return [row[1] for row in rows[:limit]]
 
 
 def _run_command(cmd: list[str]) -> dict:
@@ -143,6 +234,27 @@ def _run_command(cmd: list[str]) -> dict:
     if result.stderr.strip():
         payload["stderr"] = result.stderr.strip()
     return payload
+
+
+def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
+    reason = payload.get("verification_reason") or payload.get("reason")
+    if not reason and payload.get("exit_code", 1) != 0:
+        reason = payload.get("stderr") or "run failed"
+    summary = {
+        "run_id": payload.get("run_id", run_id),
+        "gauntlet_name": spec.gauntlet_name,
+        "config_path": config_path,
+        "command": command,
+        "artifacts": payload.get("artifacts"),
+        "verification_pass": payload.get("verification_pass"),
+        "verification_reason": payload.get("verification_reason"),
+        "exit_code": payload.get("exit_code", 1),
+    }
+    if payload.get("stderr"):
+        summary["stderr"] = payload["stderr"]
+    if reason:
+        summary["reason"] = reason
+    return summary
 
 
 def _queue_run_item(item: QueueItem) -> dict:
@@ -176,10 +288,19 @@ def _generate_turn_packet() -> dict:
     out_path = out_dir / f"turn_{int(turn_raw)}.json"
     attachment_path = serialize_turn_packet(packet, out_path)
     bundle = build_email_bundle(packet, attachment_path)
+    summary = {
+        "kind": "turn_packet",
+        "status": "generated",
+        "packet_path": attachment_path,
+        "game_id": game_id,
+        "turn": int(turn_raw),
+    }
+    summary_path = _persist_turn_summary(attachment_path, summary)
     return {
         "packet_path": attachment_path,
         "packet": packet,
         "email_bundle": bundle,
+        "summary_path": summary_path,
     }
 
 
@@ -240,46 +361,71 @@ def main() -> int:
                 save_gauntlet_spec(_preset_path(spec.gauntlet_name), spec)
                 _print_summary({"status": "saved", "gauntlet_name": spec.gauntlet_name})
             elif action == "2":
-                source = input("source [library/custom]: ").strip().lower() or "library"
+                source_raw = input("source [library/custom]: ")
+                source = _parse_source(source_raw)
                 if source == "custom":
                     name = input("preset name: ").strip()
                     spec = load_gauntlet_spec(_preset_path(name))
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
                 else:
-                    name = input("library preset name: ").strip()
-                    spec = _load_library_preset(name)
-                _print_summary({"status": "loaded", "gauntlet_name": spec.gauntlet_name})
+                    presets = _library_preset_info()
+                    _print_summary({"status": "library_presets", "presets": presets})
+                    selection = input("library preset name or index: ").strip()
+                    name = _resolve_library_selection(selection, presets)
+                    spec, preset_meta = _load_library_preset(name)
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
+                    loaded_summary.update({key: value for key, value in preset_meta.items() if value is not None})
+                _print_summary(loaded_summary)
             elif action == "3":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
                 cmd = build_launch_command(spec, config_path)
-                _print_summary({"run_id": run_id, "gauntlet_name": spec.gauntlet_name, "config_path": config_path, "preview_command": cmd})
+                summary = {
+                    "kind": "preview",
+                    "status": "preview",
+                    "run_id": run_id,
+                    "gauntlet_name": spec.gauntlet_name,
+                    "config_path": config_path,
+                    "command": cmd,
+                    "preview_command": cmd,
+                }
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "4":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
-                payload = _run_command(build_launch_command(spec, config_path))
-                _print_summary({
-                    "run_id": payload.get("run_id", run_id),
-                    "gauntlet_name": spec.gauntlet_name,
-                    "config_path": config_path,
-                    "artifacts": payload.get("artifacts"),
-                    "verification_pass": payload.get("verification_pass"),
-                    "verification_reason": payload.get("verification_reason"),
-                    "exit_code": payload.get("exit_code", 1),
-                })
+                command = build_launch_command(spec, config_path)
+                payload = _run_command(command)
+                summary = _build_launch_summary(spec, run_id, config_path, command, payload)
+                summary["kind"] = "launch"
+                summary["status"] = "success" if summary.get("exit_code", 1) == 0 else "fail"
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "5":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
+                command = build_launch_command(spec, config_path)
                 queue.append(
                     QueueItem(
                         gauntlet_name=spec.gauntlet_name,
                         config_path=config_path,
-                        command=tuple(build_launch_command(spec, config_path)),
+                        command=tuple(command),
                     )
                 )
-                _print_summary({"status": "enqueued", "queue_size": len(queue), "run_id": run_id})
+                summary = {
+                    "kind": "enqueue",
+                    "status": "enqueued",
+                    "queue_size": len(queue),
+                    "run_id": run_id,
+                    "gauntlet_name": spec.gauntlet_name,
+                    "config_path": config_path,
+                    "command": command,
+                }
+                summary["summary_path"] = _persist_run_summary(run_id, summary)
+                _print_summary(summary)
             elif action == "6":
                 if not queue:
                     raise ValueError("Queue is empty")
@@ -299,7 +445,15 @@ def main() -> int:
                     queue_id=queue_id,
                 )
                 queue.clear()
-                _print_summary({"queue_id": queue_id, "manifest_path": manifest_path, "receipt_path": receipt_path})
+                summary = {
+                    "kind": "queue",
+                    "status": "completed",
+                    "queue_id": queue_id,
+                    "manifest_path": manifest_path,
+                    "receipt_path": receipt_path,
+                }
+                summary["summary_path"] = _persist_queue_summary(queue_id, summary)
+                _print_summary(summary)
             elif action == "7":
                 _print_summary({"recent_artifacts": _show_recent_artifacts()})
             elif action == "8":
@@ -310,7 +464,12 @@ def main() -> int:
             else:
                 raise ValueError(f"Unknown menu option: {action}")
         except Exception as exc:
-            _print_summary({"status": "error", "error": str(exc)})
+            error_payload = {"status": "error", "error": str(exc)}
+            if "Available presets:" in str(exc):
+                _, available_text = str(exc).split("Available presets:", maxsplit=1)
+                available = [item.strip() for item in available_text.split(",") if item.strip() and item.strip() != "(none)"]
+                error_payload["available_presets"] = available
+            _print_summary(error_payload)
 
 
 if __name__ == "__main__":

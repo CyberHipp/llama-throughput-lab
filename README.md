@@ -140,6 +140,8 @@ python scripts/run_nexus_pipeline.py \
 
 Artifacts are written to `artifacts/nexus/` by default.
 
+Note: an optional `runtime.reasoner_adapter` (disabled by default) can enable a live call for the **reason** stage only when `pipeline.dry_run=false`.
+
 ## llama-nexus-lab flow
 
 1. Route query and expand intents (Tier A local model).
@@ -167,3 +169,5 @@ GitHub Actions runs:
 - security pattern scan (scripts/security_check.py)
 
 See `.github/workflows/ci.yml` for the exact workflow.
+
+Bootstrap details: `docs/REPOSITORY_BOOTSTRAP_GUIDE.md`.
