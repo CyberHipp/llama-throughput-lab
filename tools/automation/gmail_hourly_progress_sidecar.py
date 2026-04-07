@@ -3,19 +3,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import csv
 
-ROOT = Path(__file__).resolve().parents[2]
-QUEUE = ROOT / "registries" / "VORTEX_POST_QUEUE_AUGMENTATION_TASKS.tsv"
+from tools.automation.runtime_state import resolve_runtime_registry_path
+
+QUEUE_SEED = "registries/VORTEX_POST_QUEUE_AUGMENTATION_TASKS.tsv"
 
 
 def main() -> int:
-    if not QUEUE.exists():
-        print(f"missing registry: {QUEUE}")
+    try:
+        queue_path = resolve_runtime_registry_path(QUEUE_SEED)
+    except FileNotFoundError as exc:
+        print(str(exc))
         return 1
 
-    with QUEUE.open("r", encoding="utf-8", newline="") as fh:
+    with queue_path.open("r", encoding="utf-8", newline="") as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
 
     total = len(rows)

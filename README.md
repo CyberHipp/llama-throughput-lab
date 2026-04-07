@@ -171,3 +171,5 @@ GitHub Actions runs:
 See `.github/workflows/ci.yml` for the exact workflow.
 
 Bootstrap details: `docs/REPOSITORY_BOOTSTRAP_GUIDE.md`.
+
+Automation note: `registries/*.tsv` are committed seed templates; runtime automation state is written under `artifacts/automation_state/` by default.
