@@ -1,0 +1,3 @@
+VORTEX post-queue automation sentinel
+
+Purpose: marker file proving automation scaffolding exists and is version-controlled.
