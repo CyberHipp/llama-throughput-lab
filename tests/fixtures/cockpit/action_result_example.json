@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "action_result_version": "nexus-cockpit-action-result-v1",
+  "result": {"status": "loaded"},
+  "snapshot": {"snapshot_version": "nexus-cockpit-snapshot-v1"},
+  "receipt_path": "artifacts/nexus/cockpit_state/receipts/example.json"
+}

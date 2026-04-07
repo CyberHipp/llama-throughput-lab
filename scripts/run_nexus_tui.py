@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +24,7 @@ TUI_RUNS_DIR = REPO_ROOT / "artifacts/nexus/tui_runs"
 QUEUE_DIR = TUI_RUNS_DIR / "queue"
 EMAIL_TURNS_DIR = REPO_ROOT / "artifacts/nexus/email_turns"
 SESSION_PATH = REPO_ROOT / "artifacts/nexus/cockpit_state/session.json"
+RECEIPTS_DIR = REPO_ROOT / "artifacts/nexus/cockpit_state/receipts"
 
 MENU = [
     "1. New Gauntlet",
@@ -65,6 +67,7 @@ def _new_state() -> CockpitState:
         queue=queue_items,
         last_action_result=session.get("last_action_result"),
         last_error=session.get("last_error"),
+        last_action_receipt_path=session.get("last_action_receipt_path"),
     )
 
 
@@ -76,6 +79,7 @@ def _save_state(state: CockpitState) -> str:
         "queue_items": [{"gauntlet_name": q.gauntlet_name, "config_path": q.config_path, "command": list(q.command)} for q in state["queue"]],
         "last_action_result": state.get("last_action_result"),
         "last_error": state.get("last_error"),
+        "last_action_receipt_path": state.get("last_action_receipt_path"),
     }
     return control_plane.save_cockpit_session_state(payload, state_path=SESSION_PATH)
 
@@ -155,9 +159,6 @@ def _persist_queue_summary(queue_id: str, payload: dict) -> str:
 def _persist_queue_summary(queue_id: str, payload: dict) -> str:
     return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
 
-def _persist_queue_summary(queue_id: str, payload: dict) -> str:
-    return control_plane.persist_queue_summary(queue_id, payload, queue_dir=QUEUE_DIR)
-
 
 def _persist_turn_summary(packet_path: str, payload: dict) -> str:
     return control_plane.persist_turn_summary(packet_path, payload)
@@ -207,6 +208,8 @@ def _build_cockpit_snapshot(state: CockpitState) -> dict:
         selected_indices=state["selected_indices"],
         last_action_result=state["last_action_result"],
         last_error=state["last_error"],
+        session_state_path=str(SESSION_PATH),
+        last_action_receipt_path=state.get("last_action_receipt_path"),
     )
 
 
@@ -351,6 +354,28 @@ def _execute_bridge_action(payload: dict, state: CockpitState) -> dict:
     return result
 
 
+def _write_action_receipt(action: str, status: str, state: CockpitState, result: dict | None = None, error: str | None = None, error_type: str | None = None) -> str:
+    RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+    receipt_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + f"-{uuid.uuid4().hex[:8]}"
+    path = RECEIPTS_DIR / f"{receipt_id}.json"
+    snapshot = _build_cockpit_snapshot(state)
+    payload = {
+        "receipt_version": control_plane.RECEIPT_VERSION,
+        "action_result_version": control_plane.ACTION_RESULT_VERSION,
+        "action": action,
+        "status": status,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "session_state_path": str(SESSION_PATH),
+        "result": result,
+        "error": error,
+        "error_type": error_type,
+        "snapshot": snapshot,
+    }
+    path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    state["last_action_receipt_path"] = str(path)
+    return str(path)
+
+
 def _render_menu() -> None:
     print("\nNEXUS Cockpit v2 (fallback mode)")
     for row in MENU:
@@ -449,11 +474,13 @@ def _run_fullscreen_cockpit(state: CockpitState) -> dict:
                     should_exit, result = _execute_action(chr(key), state, prompt=_curses_prompt_factory(stdscr))
                     state["last_action_result"] = result
                     state["last_error"] = None
+                    _write_action_receipt(action=chr(key), status="ok", state=state, result=result)
                     _save_state(state)
                     if should_exit:
                         break
                 except Exception as exc:
                     state["last_error"] = str(exc)
+                    _write_action_receipt(action=chr(key), status="error", state=state, error=str(exc), error_type=type(exc).__name__)
                     _save_state(state)
             elif key in (ord("q"), 27):
                 result = {"status": "exit"}
@@ -482,13 +509,15 @@ def main(argv: list[str] | None = None) -> int:
             result = _execute_bridge_action(payload, state)
             state["last_action_result"] = result
             state["last_error"] = None
+            _write_action_receipt(action=str(payload.get("action", "unknown")), status="ok", state=state, result=result)
             _save_state(state)
-            _print_summary({"status": "ok", "result": result, "snapshot": _build_cockpit_snapshot(state)})
+            _print_summary({"status": "ok", "action_result_version": control_plane.ACTION_RESULT_VERSION, "result": result, "snapshot": _build_cockpit_snapshot(state), "receipt_path": state.get("last_action_receipt_path") })
             return 0
         except Exception as exc:
             state["last_error"] = str(exc)
+            _write_action_receipt(action=str(payload.get("action", "unknown") if "payload" in locals() else "unknown"), status="error", state=state, error=str(exc), error_type=type(exc).__name__)
             _save_state(state)
-            _print_summary({"status": "error", "error_type": type(exc).__name__, "error": str(exc), "snapshot": _build_cockpit_snapshot(state)})
+            _print_summary({"status": "error", "action_result_version": control_plane.ACTION_RESULT_VERSION, "error_type": type(exc).__name__, "error": str(exc), "snapshot": _build_cockpit_snapshot(state), "receipt_path": state.get("last_action_receipt_path") })
             return 1
 
     if sys.stdin.isatty() and os.environ.get("TERM") not in {None, "dumb"}:
@@ -505,12 +534,14 @@ def main(argv: list[str] | None = None) -> int:
             should_exit, result = _execute_action(action, state, prompt=input)
             state["last_action_result"] = result
             state["last_error"] = None
+            _write_action_receipt(action=action, status="ok", state=state, result=result)
             _save_state(state)
             _print_summary(result)
             if should_exit:
                 return 0
         except Exception as exc:
             state["last_error"] = str(exc)
+            _write_action_receipt(action=action, status="error", state=state, error=str(exc), error_type=type(exc).__name__)
             _save_state(state)
             err = {"status": "error", "error": str(exc)}
             if "Available presets:" in str(exc):

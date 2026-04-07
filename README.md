@@ -126,6 +126,7 @@ Cockpit v2 remains terminal-first; future Android integrations should consume st
 Use `python scripts/run_nexus_tui.py --dump-state` to export a machine-readable cockpit snapshot for non-terminal clients.
 Fullscreen Cockpit v2 now supports the existing workflows directly (new/load/preview/launch/enqueue/run-queue/artifacts/turn-packet) while preserving fallback mode.
 Cockpit v2 also exposes a machine-readable action bridge via `--action-json` / `--action-file` for non-terminal clients.
+Versioned Cockpit contracts and receipt history are documented in `docs/nexus_cockpit_contract.md`.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`

@@ -111,6 +111,7 @@ class ControlPlaneTests(unittest.TestCase):
                 email_turns_dir=turns,
             )
         self.assertIn("screens", snapshot)
+        self.assertEqual(snapshot["snapshot_version"], "nexus-cockpit-snapshot-v1")
         self.assertIn("dashboard", snapshot)
         self.assertIn("cockpit", snapshot)
         self.assertEqual(snapshot["cockpit"]["selected_screen"], "Dashboard")

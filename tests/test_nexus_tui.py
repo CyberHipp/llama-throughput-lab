@@ -172,6 +172,8 @@ class NexusTuiTests(unittest.TestCase):
         self.assertIn("cockpit", payload)
         self.assertIn("loaded_gauntlet", payload["cockpit"])
         self.assertIn("last_action_result", payload["cockpit"])
+        self.assertIn("snapshot_version", payload)
+        self.assertIn("session_state_path", payload["cockpit"])
 
 
     def test_action_bridge_load_preview_enqueue_and_failure(self):
@@ -183,6 +185,8 @@ class NexusTuiTests(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 payload = json.loads(mock_print.call_args[0][0])
                 self.assertEqual(payload["status"], "ok")
+                self.assertIn("action_result_version", payload)
+                self.assertTrue(Path(payload["receipt_path"]).exists())
 
                 with mock.patch("builtins.print") as mock_print:
                     rc = run_nexus_tui.main(["--action-json", json.dumps({"action": "enqueue"})])
@@ -203,6 +207,7 @@ class NexusTuiTests(unittest.TestCase):
                 err_payload = json.loads(mock_print.call_args[0][0])
                 self.assertEqual(err_payload["status"], "error")
                 self.assertIn("error_type", err_payload)
+                self.assertTrue(Path(err_payload["receipt_path"]).exists())
 
     def test_action_bridge_generate_turn_packet(self):
         with tempfile.TemporaryDirectory() as td:

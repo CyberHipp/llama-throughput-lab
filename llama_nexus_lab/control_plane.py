@@ -17,6 +17,9 @@ QUEUE_DIR = TUI_RUNS_DIR / "queue"
 EMAIL_TURNS_DIR = REPO_ROOT / "artifacts/nexus/email_turns"
 COCKPIT_STATE_PATH = REPO_ROOT / "artifacts/nexus/cockpit_state/session.json"
 COCKPIT_SCREENS = ["Dashboard", "Presets", "Queue", "Artifacts", "Turn Packets"]
+SNAPSHOT_VERSION = "nexus-cockpit-snapshot-v1"
+ACTION_RESULT_VERSION = "nexus-cockpit-action-result-v1"
+RECEIPT_VERSION = "nexus-cockpit-action-receipt-v1"
 
 
 def available_library_presets(preset_dir: Path = PRESET_DIR) -> list[str]:
@@ -278,6 +281,7 @@ def default_cockpit_session_state() -> dict:
         "queue_items": [],
         "last_action_result": None,
         "last_error": None,
+        "last_action_receipt_path": None,
     }
 
 
@@ -411,8 +415,11 @@ def build_cockpit_snapshot(
     selected_indices: dict[str, int] | None = None,
     last_action_result: dict | None = None,
     last_error: str | None = None,
+    session_state_path: str | None = None,
+    last_action_receipt_path: str | None = None,
 ) -> dict:
     return {
+        "snapshot_version": SNAPSHOT_VERSION,
         "screens": COCKPIT_SCREENS,
         "roots": {
             "preset_dir": str(preset_dir),
@@ -421,11 +428,13 @@ def build_cockpit_snapshot(
             "email_turns_dir": str(email_turns_dir),
         },
         "cockpit": {
+            "session_state_path": session_state_path,
             "selected_screen": selected_screen,
             "selected_indices": selected_indices or {},
             "loaded_gauntlet": summarize_loaded_gauntlet(loaded_gauntlet),
             "last_action_result": last_action_result,
             "last_error": last_error,
+            "last_action_receipt_path": last_action_receipt_path,
         },
         "dashboard": build_dashboard_state(queue_items=queue_items, recent_limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir),
         "presets": build_presets_state(preset_dir=preset_dir),
