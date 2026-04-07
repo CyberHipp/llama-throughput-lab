@@ -73,8 +73,55 @@ def _preset_path(name: str) -> Path:
     return GAUNTLET_DIR / f"{name}.json"
 
 
-def _load_library_preset(name: str) -> GauntletSpec:
-    payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+def _available_library_presets() -> list[str]:
+    if not PRESET_DIR.exists():
+        return []
+    return sorted(path.stem for path in PRESET_DIR.glob("*.json"))
+
+
+def _library_preset_info() -> list[dict[str, str | None]]:
+    entries: list[dict[str, str | None]] = []
+    for name in _available_library_presets():
+        payload = json.loads((PRESET_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        entries.append(
+            {
+                "name": name,
+                "mode": payload.get("mode"),
+                "risk_level": payload.get("risk_level"),
+                "notes": payload.get("notes"),
+            }
+        )
+    return entries
+
+
+def _parse_source(source_raw: str) -> str:
+    source = source_raw.strip().lower()
+    if source not in {"library", "custom"}:
+        raise ValueError("Invalid source. Expected one of: library, custom")
+    return source
+
+
+def _resolve_library_selection(selection_raw: str, presets: list[dict[str, str | None]]) -> str:
+    selection = selection_raw.strip()
+    names = [row["name"] for row in presets]
+    if selection.isdigit():
+        index = int(selection)
+        if index < 1 or index > len(names):
+            raise ValueError(f"Library selection '{selection}' is out of range. Available presets: {', '.join(names)}")
+        return names[index - 1]
+    if selection in names:
+        return selection
+    raise FileNotFoundError(f"Library preset '{selection}' not found. Available presets: {', '.join(names)}")
+
+
+def _load_library_preset(name: str) -> tuple[GauntletSpec, dict[str, str | None]]:
+    preset_path = PRESET_DIR / f"{name}.json"
+    if not preset_path.exists():
+        available = _available_library_presets()
+        raise FileNotFoundError(
+            f"Library preset '{name}' not found. Available presets: {', '.join(available) if available else '(none)'}"
+        )
+    payload = json.loads(preset_path.read_text(encoding="utf-8"))
     if "query" not in payload:
         template = payload.get("query_template", "")
         topic = input("topic placeholder value: ").strip() or "default topic"
@@ -88,7 +135,11 @@ def _load_library_preset(name: str) -> GauntletSpec:
         require_verify_pass=bool(payload["require_verify_pass"]),
     )
     spec.validate()
-    return spec
+    return spec, {
+        "mode": payload.get("mode"),
+        "risk_level": payload.get("risk_level"),
+        "notes": payload.get("notes"),
+    }
 
 
 def build_launch_command(spec: GauntletSpec, runtime_config_path: str) -> list[str]:
@@ -143,6 +194,27 @@ def _run_command(cmd: list[str]) -> dict:
     if result.stderr.strip():
         payload["stderr"] = result.stderr.strip()
     return payload
+
+
+def _build_launch_summary(spec: GauntletSpec, run_id: str, config_path: str, command: list[str], payload: dict) -> dict:
+    reason = payload.get("verification_reason") or payload.get("reason")
+    if not reason and payload.get("exit_code", 1) != 0:
+        reason = payload.get("stderr") or "run failed"
+    summary = {
+        "run_id": payload.get("run_id", run_id),
+        "gauntlet_name": spec.gauntlet_name,
+        "config_path": config_path,
+        "command": command,
+        "artifacts": payload.get("artifacts"),
+        "verification_pass": payload.get("verification_pass"),
+        "verification_reason": payload.get("verification_reason"),
+        "exit_code": payload.get("exit_code", 1),
+    }
+    if payload.get("stderr"):
+        summary["stderr"] = payload["stderr"]
+    if reason:
+        summary["reason"] = reason
+    return summary
 
 
 def _queue_run_item(item: QueueItem) -> dict:
@@ -240,14 +312,21 @@ def main() -> int:
                 save_gauntlet_spec(_preset_path(spec.gauntlet_name), spec)
                 _print_summary({"status": "saved", "gauntlet_name": spec.gauntlet_name})
             elif action == "2":
-                source = input("source [library/custom]: ").strip().lower() or "library"
+                source_raw = input("source [library/custom]: ")
+                source = _parse_source(source_raw)
                 if source == "custom":
                     name = input("preset name: ").strip()
                     spec = load_gauntlet_spec(_preset_path(name))
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
                 else:
-                    name = input("library preset name: ").strip()
-                    spec = _load_library_preset(name)
-                _print_summary({"status": "loaded", "gauntlet_name": spec.gauntlet_name})
+                    presets = _library_preset_info()
+                    _print_summary({"status": "library_presets", "presets": presets})
+                    selection = input("library preset name or index: ").strip()
+                    name = _resolve_library_selection(selection, presets)
+                    spec, preset_meta = _load_library_preset(name)
+                    loaded_summary = {"status": "loaded", "gauntlet_name": spec.gauntlet_name}
+                    loaded_summary.update({key: value for key, value in preset_meta.items() if value is not None})
+                _print_summary(loaded_summary)
             elif action == "3":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
@@ -258,16 +337,9 @@ def main() -> int:
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
                 run_id, config_path = _build_runtime_config(spec)
-                payload = _run_command(build_launch_command(spec, config_path))
-                _print_summary({
-                    "run_id": payload.get("run_id", run_id),
-                    "gauntlet_name": spec.gauntlet_name,
-                    "config_path": config_path,
-                    "artifacts": payload.get("artifacts"),
-                    "verification_pass": payload.get("verification_pass"),
-                    "verification_reason": payload.get("verification_reason"),
-                    "exit_code": payload.get("exit_code", 1),
-                })
+                command = build_launch_command(spec, config_path)
+                payload = _run_command(command)
+                _print_summary(_build_launch_summary(spec, run_id, config_path, command, payload))
             elif action == "5":
                 if spec is None:
                     raise ValueError("No gauntlet loaded. Choose New or Load first.")
@@ -310,7 +382,12 @@ def main() -> int:
             else:
                 raise ValueError(f"Unknown menu option: {action}")
         except Exception as exc:
-            _print_summary({"status": "error", "error": str(exc)})
+            error_payload = {"status": "error", "error": str(exc)}
+            if "Available presets:" in str(exc):
+                _, available_text = str(exc).split("Available presets:", maxsplit=1)
+                available = [item.strip() for item in available_text.split(",") if item.strip() and item.strip() != "(none)"]
+                error_payload["available_presets"] = available
+            _print_summary(error_payload)
 
 
 if __name__ == "__main__":
