@@ -112,6 +112,8 @@ class ControlPlaneTests(unittest.TestCase):
             )
         self.assertIn("screens", snapshot)
         self.assertIn("dashboard", snapshot)
+        self.assertIn("cockpit", snapshot)
+        self.assertEqual(snapshot["cockpit"]["selected_screen"], "Dashboard")
         self.assertEqual(snapshot["queue"]["queue_size"], 1)
         self.assertGreaterEqual(snapshot["presets"]["count"], 1)
         self.assertIn("recent_artifacts", snapshot["artifacts"])

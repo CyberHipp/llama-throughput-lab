@@ -15,6 +15,9 @@ from scripts.run_nexus_tui import (
     _parse_source,
     _resolve_library_selection,
     _show_recent_artifacts,
+    _new_state,
+    _execute_action,
+    _screen_item_count,
     build_launch_command,
 )
 from scripts import run_nexus_tui
@@ -135,6 +138,26 @@ class NexusTuiTests(unittest.TestCase):
         self.assertEqual(summary["reason"], "boom")
 
 
+
+    def test_inline_action_helper_is_deterministic(self):
+        state = _new_state()
+        prompts = iter(["library", "1", "llama throughput"])
+        should_exit, result = _execute_action("2", state, prompt=lambda _label: next(prompts))
+        self.assertFalse(should_exit)
+        self.assertEqual(result["status"], "loaded")
+        self.assertIsNotNone(state["loaded_spec"])
+
+    def test_screen_item_count_helper(self):
+        snapshot = {
+            "presets": {"count": 3},
+            "queue": {"queue_size": 2},
+            "artifacts": {"count": 4},
+            "turn_packets": {"count": 0},
+        }
+        self.assertEqual(_screen_item_count(snapshot, "Presets"), 3)
+        self.assertEqual(_screen_item_count(snapshot, "Queue"), 2)
+        self.assertEqual(_screen_item_count(snapshot, "Turn Packets"), 1)
+
     def test_dump_state_returns_machine_readable_snapshot(self):
         with mock.patch("builtins.print") as mock_print:
             exit_code = run_nexus_tui.main(["--dump-state"])
@@ -146,6 +169,8 @@ class NexusTuiTests(unittest.TestCase):
         self.assertIn("queue", payload)
         self.assertIn("artifacts", payload)
         self.assertIn("turn_packets", payload)
+        self.assertIn("cockpit", payload)
+        self.assertIn("loaded_gauntlet", payload["cockpit"])
 
     def test_non_interactive_fallback_smoke_preview(self):
         inputs = iter(

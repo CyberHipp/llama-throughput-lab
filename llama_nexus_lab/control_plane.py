@@ -267,6 +267,19 @@ def run_queue(queue: list[QueueItem], stop_on_fail: bool, queue_id: str, queue_d
     return summary
 
 
+
+def summarize_loaded_gauntlet(spec: GauntletSpec | None) -> dict | None:
+    if spec is None:
+        return None
+    return {
+        "gauntlet_name": spec.gauntlet_name,
+        "query": spec.query,
+        "max_search_intents": spec.max_search_intents,
+        "strict_citation_required": spec.strict_citation_required,
+        "dry_run": spec.dry_run,
+        "require_verify_pass": spec.require_verify_pass,
+    }
+
 def build_dashboard_state(queue_items: list[QueueItem] | None = None, recent_limit: int = 5, tui_runs_dir: Path = TUI_RUNS_DIR, queue_dir: Path = QUEUE_DIR, email_turns_dir: Path = EMAIL_TURNS_DIR) -> dict:
     recent = list_recent_artifacts(limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir)
     queue_count = len(queue_items or [])
@@ -326,7 +339,19 @@ def build_turn_packets_state(limit: int = 5, email_turns_dir: Path = EMAIL_TURNS
     }
 
 
-def build_cockpit_snapshot(queue_items: list[QueueItem] | None = None, preset_dir: Path = PRESET_DIR, tui_runs_dir: Path = TUI_RUNS_DIR, queue_dir: Path = QUEUE_DIR, email_turns_dir: Path = EMAIL_TURNS_DIR, recent_limit: int = 5) -> dict:
+def build_cockpit_snapshot(
+    queue_items: list[QueueItem] | None = None,
+    preset_dir: Path = PRESET_DIR,
+    tui_runs_dir: Path = TUI_RUNS_DIR,
+    queue_dir: Path = QUEUE_DIR,
+    email_turns_dir: Path = EMAIL_TURNS_DIR,
+    recent_limit: int = 5,
+    loaded_gauntlet: GauntletSpec | None = None,
+    selected_screen: str = "Dashboard",
+    selected_indices: dict[str, int] | None = None,
+    last_action_result: dict | None = None,
+    last_error: str | None = None,
+) -> dict:
     return {
         "screens": COCKPIT_SCREENS,
         "roots": {
@@ -334,6 +359,13 @@ def build_cockpit_snapshot(queue_items: list[QueueItem] | None = None, preset_di
             "tui_runs_dir": str(tui_runs_dir),
             "queue_dir": str(queue_dir),
             "email_turns_dir": str(email_turns_dir),
+        },
+        "cockpit": {
+            "selected_screen": selected_screen,
+            "selected_indices": selected_indices or {},
+            "loaded_gauntlet": summarize_loaded_gauntlet(loaded_gauntlet),
+            "last_action_result": last_action_result,
+            "last_error": last_error,
         },
         "dashboard": build_dashboard_state(queue_items=queue_items, recent_limit=recent_limit, tui_runs_dir=tui_runs_dir, queue_dir=queue_dir, email_turns_dir=email_turns_dir),
         "presets": build_presets_state(preset_dir=preset_dir),
