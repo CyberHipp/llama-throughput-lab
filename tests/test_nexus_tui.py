@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from llama_nexus_lab.gauntlet import GauntletSpec, build_temp_runtime_config, load_gauntlet_spec, save_gauntlet_spec
 from scripts.run_nexus_tui import _build_launch_summary, _load_library_preset, _parse_source, build_launch_command
+from scripts import run_nexus_tui
 
 
 class NexusTuiTests(unittest.TestCase):
@@ -89,6 +91,36 @@ class NexusTuiTests(unittest.TestCase):
         self.assertEqual(summary["command"], cmd)
         self.assertEqual(summary["stderr"], "boom")
         self.assertEqual(summary["reason"], "boom")
+
+    def test_non_interactive_fallback_smoke_preview(self):
+        inputs = iter(
+            [
+                "2",  # menu: load preset
+                "library",
+                "vortex_fast_scan",
+                "llama throughput",
+                "3",  # menu: dry-run preview
+                "9",  # menu: exit
+            ]
+        )
+        with mock.patch("sys.stdin.isatty", return_value=False):
+            with mock.patch("builtins.input", side_effect=lambda _prompt="": next(inputs)):
+                with mock.patch("builtins.print") as mock_print:
+                    exit_code = run_nexus_tui.main()
+        self.assertEqual(exit_code, 0)
+        json_rows = []
+        for call in mock_print.call_args_list:
+            rendered = call.args[0] if call.args else ""
+            try:
+                json_rows.append(json.loads(rendered))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        preview_rows = [row for row in json_rows if "preview_command" in row]
+        self.assertTrue(preview_rows)
+        preview = preview_rows[-1]
+        self.assertIn("gauntlet_name", preview)
+        self.assertIn("config_path", preview)
+        self.assertIn("preview_command", preview)
 
 
 if __name__ == "__main__":
