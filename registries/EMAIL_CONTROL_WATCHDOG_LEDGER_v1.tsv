@@ -1,0 +1,2 @@
+run_id	utc_timestamp	controller	status	notes
+seed-0001	2026-04-07T00:00:00Z	gmail_control_watchdog	initialized	Seed row for ledger schema

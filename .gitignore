@@ -4,3 +4,5 @@ __pycache__/
 results/
 artifacts/
 configs/local/*.json
+
+logs/

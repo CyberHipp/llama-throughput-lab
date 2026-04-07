@@ -122,6 +122,7 @@ python scripts/run_nexus_tui.py
 ```
 
 See `docs/nexus_tui.md` for preset format, menu actions, and non-goals.
+Cockpit v2 remains terminal-first; future Android integrations should consume structured control-plane outputs rather than terminal text scraping.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`
@@ -139,6 +140,8 @@ python scripts/run_nexus_pipeline.py \
 ```
 
 Artifacts are written to `artifacts/nexus/` by default.
+
+Note: an optional `runtime.reasoner_adapter` (disabled by default) can enable a live call for the **reason** stage only when `pipeline.dry_run=false`.
 
 ## llama-nexus-lab flow
 
@@ -167,3 +170,7 @@ GitHub Actions runs:
 - security pattern scan (scripts/security_check.py)
 
 See `.github/workflows/ci.yml` for the exact workflow.
+
+Bootstrap details: `docs/REPOSITORY_BOOTSTRAP_GUIDE.md`.
+
+Automation note: `registries/*.tsv` are committed seed templates; runtime automation state is written under `artifacts/automation_state/` by default.
