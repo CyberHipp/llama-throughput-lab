@@ -39,11 +39,12 @@
     },
     "contract_versions": {
       "type": "object",
-      "required": ["snapshot", "action_result", "capabilities"],
+      "required": ["snapshot", "action_result", "capabilities", "action_specs"],
       "properties": {
         "snapshot": {"const": "nexus_cockpit_snapshot_v1"},
         "action_result": {"const": "nexus_cockpit_action_result_v1"},
-        "capabilities": {"const": "nexus_cockpit_capabilities_v1"}
+        "capabilities": {"const": "nexus_cockpit_capabilities_v1"},
+        "action_specs": {"const": "nexus_cockpit_action_specs_v1"}
       },
       "additionalProperties": false
     }

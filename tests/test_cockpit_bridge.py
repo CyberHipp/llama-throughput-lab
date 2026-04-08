@@ -46,6 +46,12 @@ class CockpitBridgeTests(unittest.TestCase):
                     ["generate_turn_packet", "load_preset", "preview", "show_recent_artifacts"],
                 )
 
+                code, action_specs = self._get_json(base + "/action-specs")
+                self.assertEqual(code, 200)
+                validate_payload("action_specs", action_specs)
+                described = [row["action"] for row in action_specs["actions"]]
+                self.assertEqual(described, ["load_preset", "preview", "show_recent_artifacts", "generate_turn_packet"])
+
                 code, snapshot = self._get_json(base + "/snapshot")
                 self.assertEqual(code, 200)
                 validate_payload("snapshot", snapshot)

@@ -23,8 +23,50 @@ CONTRACT_VERSIONS = {
     "snapshot": "nexus_cockpit_snapshot_v1",
     "action_result": "nexus_cockpit_action_result_v1",
     "capabilities": "nexus_cockpit_capabilities_v1",
+    "action_specs": "nexus_cockpit_action_specs_v1",
 }
-ENDPOINTS = ["/healthz", "/capabilities", "/snapshot", "/action", "/receipts", "/receipts/<name>"]
+ENDPOINTS = ["/healthz", "/capabilities", "/action-specs", "/snapshot", "/action", "/receipts", "/receipts/<name>"]
+ACTION_SPECS_VERSION = "nexus_cockpit_action_specs_v1"
+ACTION_SPECS = [
+    {
+        "action": "load_preset",
+        "description": "Load a library or custom gauntlet preset into cockpit session state.",
+        "required_fields": ["action", "source", "selection"],
+        "optional_fields": ["topic", "preset_path"],
+        "example_payload": {"action": "load_preset", "source": "library", "selection": "1", "topic": "throughput triage"},
+        "notes": "source must be one of library/custom; selection may be preset name or 1-based index for library.",
+    },
+    {
+        "action": "preview",
+        "description": "Build and persist preview summary for currently loaded gauntlet without launching a run.",
+        "required_fields": ["action"],
+        "optional_fields": [],
+        "example_payload": {"action": "preview"},
+        "notes": "requires a previously loaded gauntlet in session state.",
+    },
+    {
+        "action": "show_recent_artifacts",
+        "description": "Return structured recent artifact rows from cockpit-managed artifact surfaces.",
+        "required_fields": ["action"],
+        "optional_fields": [],
+        "example_payload": {"action": "show_recent_artifacts"},
+        "notes": "returns path fallback rows when no summary files are available.",
+    },
+    {
+        "action": "generate_turn_packet",
+        "description": "Generate one email turn packet and persist packet + summary artifacts.",
+        "required_fields": ["action", "game_id", "turn", "target"],
+        "optional_fields": ["operator", "intent", "notes", "summary"],
+        "example_payload": {
+            "action": "generate_turn_packet",
+            "game_id": "symbios-demo",
+            "turn": 1,
+            "target": "ops@local.test",
+            "operator": "bridge-smoke",
+        },
+        "notes": "turn must be a positive integer; target should be a non-empty recipient string.",
+    },
+]
 
 
 def _run_tui_json(args: list[str]) -> tuple[int, dict]:
@@ -69,6 +111,19 @@ def make_handler(session_path: Path, receipts_dir: Path, receipt_limit: int = 20
                         "allowed_actions": sorted(ALLOWED_ACTIONS),
                         "endpoints": ENDPOINTS,
                         "contract_versions": CONTRACT_VERSIONS,
+                    },
+                )
+
+            if parsed.path == "/action-specs":
+                return _json(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "bridge_version": BRIDGE_VERSION,
+                        "action_specs_version": ACTION_SPECS_VERSION,
+                        "local_only": True,
+                        "actions": ACTION_SPECS,
                     },
                 )
 

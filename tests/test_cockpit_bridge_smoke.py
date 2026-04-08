@@ -26,11 +26,13 @@ class CockpitBridgeSmokeTests(unittest.TestCase):
             expected = [
                 "healthz.json",
                 "capabilities.json",
+                "action_specs.json",
                 "snapshot.json",
                 "action_result.json",
                 "receipts.json",
                 "receipt.json",
                 "validate_capabilities.json",
+                "validate_action_specs.json",
                 "validate_snapshot.json",
                 "validate_result.json",
                 "validate_receipt.json",
@@ -41,6 +43,7 @@ class CockpitBridgeSmokeTests(unittest.TestCase):
 
             for name in (
                 "validate_capabilities.json",
+                "validate_action_specs.json",
                 "validate_snapshot.json",
                 "validate_result.json",
                 "validate_receipt.json",

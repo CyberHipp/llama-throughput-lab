@@ -12,6 +12,7 @@ SCHEMA_FILES = {
     "action": "schemas/nexus_cockpit_action_v1.json",
     "result": "schemas/nexus_cockpit_action_result_v1.json",
     "capabilities": "schemas/nexus_cockpit_capabilities_v1.json",
+    "action_specs": "schemas/nexus_cockpit_action_specs_v1.json",
 }
 
 
@@ -84,7 +85,11 @@ def validate_receipt(payload: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate NEXUS cockpit artifacts")
-    parser.add_argument("--kind", choices=["snapshot", "action", "result", "receipt", "capabilities"], required=True)
+    parser.add_argument(
+        "--kind",
+        choices=["snapshot", "action", "result", "receipt", "capabilities", "action_specs"],
+        required=True,
+    )
     parser.add_argument("--json-file", required=True)
     args = parser.parse_args(argv)
 

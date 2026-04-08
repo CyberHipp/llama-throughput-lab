@@ -19,6 +19,7 @@ This pass is intentionally local-only. No TLS, reverse-proxy, public network exp
 |---|---|---|
 | `GET` | `/healthz` | Basic bridge status. |
 | `GET` | `/capabilities` | Bridge discoverability payload (local-only posture, actions, endpoints, contract versions). |
+| `GET` | `/action-specs` | Per-action payload contract for currently allowed bridge actions. |
 | `GET` | `/snapshot` | Returns Cockpit snapshot contract payload. |
 | `POST` | `/action` | Executes one allowed cockpit action and returns action-result envelope. |
 | `GET` | `/receipts` | Lists recent receipt filenames from configured receipts dir. |
@@ -56,6 +57,12 @@ Capabilities:
 
 ```bash
 curl -s http://127.0.0.1:8765/capabilities
+```
+
+Action specs:
+
+```bash
+curl -s http://127.0.0.1:8765/action-specs
 ```
 
 Snapshot:

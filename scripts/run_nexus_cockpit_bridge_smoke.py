@@ -86,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
 
     health_payload: dict = {}
     capabilities_payload: dict = {}
+    action_specs_payload: dict = {}
     snapshot_payload: dict = {}
     action_result_payload: dict = {}
     receipts_payload: dict = {}
@@ -99,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if not errors:
             _, capabilities_payload = _request_json("GET", base_url + "/capabilities")
+            _, action_specs_payload = _request_json("GET", base_url + "/action-specs")
             _, snapshot_payload = _request_json("GET", base_url + "/snapshot")
             action_body = {"action": "load_preset", "source": "library", "selection": "1", "topic": "bridge smoke"}
             _, action_result_payload = _request_json("POST", base_url + "/action", action_body)
@@ -111,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
 
         healthz_path = run_dir / "healthz.json"
         capabilities_path = run_dir / "capabilities.json"
+        action_specs_path = run_dir / "action_specs.json"
         snapshot_path = run_dir / "snapshot.json"
         action_result_path = run_dir / "action_result.json"
         receipts_path = run_dir / "receipts.json"
@@ -118,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
         healthz_path.write_text(json.dumps(health_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         capabilities_path.write_text(json.dumps(capabilities_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        action_specs_path.write_text(json.dumps(action_specs_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         snapshot_path.write_text(json.dumps(snapshot_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         action_result_path.write_text(json.dumps(action_result_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         receipts_path.write_text(json.dumps(receipts_payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
@@ -126,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         validations: dict[str, dict] = {}
         for kind, path in (
             ("capabilities", capabilities_path),
+            ("action_specs", action_specs_path),
             ("snapshot", snapshot_path),
             ("result", action_result_path),
             ("receipt", receipt_path),
@@ -138,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
         validated = all(
             validations.get(k, {}).get("status") == "ok"
-            for k in ("capabilities", "snapshot", "result", "receipt")
+            for k in ("capabilities", "action_specs", "snapshot", "result", "receipt")
         )
         if not validated:
             errors.append("one or more validations did not report ok")
@@ -149,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             "artifact_dir": str(run_dir),
             "healthz_path": str(healthz_path),
             "capabilities_path": str(capabilities_path),
+            "action_specs_path": str(action_specs_path),
             "snapshot_path": str(snapshot_path),
             "action_result_path": str(action_result_path),
             "receipts_path": str(receipts_path),
