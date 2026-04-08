@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NEXUS Cockpit Action Request v1",
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "new_gauntlet",
+        "load_preset",
+        "preview",
+        "launch",
+        "enqueue",
+        "run_queue",
+        "show_recent_artifacts",
+        "generate_turn_packet",
+        "reset_queue",
+        "clear_last_error",
+        "exit"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

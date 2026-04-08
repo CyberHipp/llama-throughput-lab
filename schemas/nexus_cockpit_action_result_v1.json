@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NEXUS Cockpit Action Result v1",
+  "type": "object",
+  "required": ["status", "action_result_version", "snapshot"],
+  "properties": {
+    "status": {"type": "string", "enum": ["ok", "error"]},
+    "action_result_version": {"const": "nexus-cockpit-action-result-v1"},
+    "result": {"type": ["object", "null"]},
+    "error": {"type": ["string", "null"]},
+    "error_type": {"type": ["string", "null"]},
+    "receipt_path": {"type": ["string", "null"]},
+    "snapshot": {"type": "object"}
+  },
+  "additionalProperties": true
+}

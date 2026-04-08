@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "required": [
+    "status",
+    "bridge_version",
+    "local_only",
+    "allowed_actions",
+    "endpoints",
+    "contract_versions"
+  ],
+  "properties": {
+    "status": {
+      "const": "ok"
+    },
+    "bridge_version": {
+      "type": "string"
+    },
+    "local_only": {
+      "type": "boolean",
+      "const": true
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "generate_turn_packet",
+          "load_preset",
+          "preview",
+          "show_recent_artifacts"
+        ]
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "contract_versions": {
+      "type": "object",
+      "required": ["snapshot", "action_result", "capabilities", "action_specs"],
+      "properties": {
+        "snapshot": {"const": "nexus_cockpit_snapshot_v1"},
+        "action_result": {"const": "nexus_cockpit_action_result_v1"},
+        "capabilities": {"const": "nexus_cockpit_capabilities_v1"},
+        "action_specs": {"const": "nexus_cockpit_action_specs_v1"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
