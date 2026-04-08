@@ -37,6 +37,15 @@ class CockpitBridgeTests(unittest.TestCase):
                 self.assertEqual(code, 200)
                 self.assertEqual(health["status"], "ok")
 
+                code, capabilities = self._get_json(base + "/capabilities")
+                self.assertEqual(code, 200)
+                validate_payload("capabilities", capabilities)
+                self.assertTrue(capabilities["local_only"])
+                self.assertEqual(
+                    capabilities["allowed_actions"],
+                    ["generate_turn_packet", "load_preset", "preview", "show_recent_artifacts"],
+                )
+
                 code, snapshot = self._get_json(base + "/snapshot")
                 self.assertEqual(code, 200)
                 validate_payload("snapshot", snapshot)

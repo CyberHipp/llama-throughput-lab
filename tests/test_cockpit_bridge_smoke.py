@@ -25,10 +25,12 @@ class CockpitBridgeSmokeTests(unittest.TestCase):
 
             expected = [
                 "healthz.json",
+                "capabilities.json",
                 "snapshot.json",
                 "action_result.json",
                 "receipts.json",
                 "receipt.json",
+                "validate_capabilities.json",
                 "validate_snapshot.json",
                 "validate_result.json",
                 "validate_receipt.json",
@@ -37,7 +39,12 @@ class CockpitBridgeSmokeTests(unittest.TestCase):
             for name in expected:
                 self.assertTrue((run_dir / name).exists(), msg=f"missing {name}")
 
-            for name in ("validate_snapshot.json", "validate_result.json", "validate_receipt.json"):
+            for name in (
+                "validate_capabilities.json",
+                "validate_snapshot.json",
+                "validate_result.json",
+                "validate_receipt.json",
+            ):
                 payload = json.loads((run_dir / name).read_text(encoding="utf-8"))
                 self.assertEqual(payload.get("status"), "ok")
 

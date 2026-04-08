@@ -19,6 +19,12 @@ from scripts import run_nexus_tui
 
 BRIDGE_VERSION = "nexus-cockpit-bridge-v1"
 ALLOWED_ACTIONS = {"load_preset", "preview", "show_recent_artifacts", "generate_turn_packet"}
+CONTRACT_VERSIONS = {
+    "snapshot": "nexus_cockpit_snapshot_v1",
+    "action_result": "nexus_cockpit_action_result_v1",
+    "capabilities": "nexus_cockpit_capabilities_v1",
+}
+ENDPOINTS = ["/healthz", "/capabilities", "/snapshot", "/action", "/receipts", "/receipts/<name>"]
 
 
 def _run_tui_json(args: list[str]) -> tuple[int, dict]:
@@ -51,6 +57,20 @@ def make_handler(session_path: Path, receipts_dir: Path, receipt_limit: int = 20
             parsed = urlparse(self.path)
             if parsed.path == "/healthz":
                 return _json(self, HTTPStatus.OK, {"status": "ok", "bridge_version": BRIDGE_VERSION})
+
+            if parsed.path == "/capabilities":
+                return _json(
+                    self,
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "bridge_version": BRIDGE_VERSION,
+                        "local_only": True,
+                        "allowed_actions": sorted(ALLOWED_ACTIONS),
+                        "endpoints": ENDPOINTS,
+                        "contract_versions": CONTRACT_VERSIONS,
+                    },
+                )
 
             if parsed.path == "/snapshot":
                 rc, payload = _run_tui_json(["--dump-state", *self._snapshot_args()])

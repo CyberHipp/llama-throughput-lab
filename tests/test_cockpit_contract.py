@@ -13,6 +13,7 @@ class CockpitContractTests(unittest.TestCase):
         return json.loads(Path(path).read_text(encoding="utf-8"))
 
     def test_schema_and_fixture_shapes_validate(self) -> None:
+        validate_payload("capabilities", self._load("tests/fixtures/cockpit/capabilities_example.json"))
         validate_payload("snapshot", self._load("tests/fixtures/cockpit/snapshot_example.json"))
         validate_payload("action", self._load("tests/fixtures/cockpit/action_load_preset.json"))
         validate_payload("action", self._load("tests/fixtures/cockpit/action_enqueue.json"))
