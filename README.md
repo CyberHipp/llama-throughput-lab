@@ -122,6 +122,15 @@ python scripts/run_nexus_tui.py
 ```
 
 See `docs/nexus_tui.md` for preset format, menu actions, and non-goals.
+Cockpit v2 remains terminal-first; future Android integrations should consume structured control-plane outputs rather than terminal text scraping.
+Use `python scripts/run_nexus_tui.py --dump-state` to export a machine-readable cockpit snapshot for non-terminal clients.
+Fullscreen Cockpit v2 now supports the existing workflows directly (new/load/preview/launch/enqueue/run-queue/artifacts/turn-packet) while preserving fallback mode.
+Cockpit v2 also exposes a machine-readable action bridge via `--action-json` / `--action-file` for non-terminal clients.
+Versioned Cockpit contracts and receipt history are documented in `docs/nexus_cockpit_contract.md`.
+Use `scripts/validate_nexus_cockpit_contract.py` to validate snapshot/action/result/receipt artifacts against versioned cockpit schemas.
+Run `python3 scripts/run_nexus_cockpit_contract_smoke.py` to generate a validated cockpit contract evidence bundle.
+Run `python3 scripts/run_nexus_cockpit_bridge_smoke.py` to generate a validated local HTTP bridge evidence bundle.
+Bridge endpoint posture and usage are documented in `docs/nexus_cockpit_bridge.md`.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`
@@ -139,6 +148,8 @@ python scripts/run_nexus_pipeline.py \
 ```
 
 Artifacts are written to `artifacts/nexus/` by default.
+
+Note: an optional `runtime.reasoner_adapter` (disabled by default) can enable a live call for the **reason** stage only when `pipeline.dry_run=false`.
 
 ## llama-nexus-lab flow
 
@@ -167,3 +178,7 @@ GitHub Actions runs:
 - security pattern scan (scripts/security_check.py)
 
 See `.github/workflows/ci.yml` for the exact workflow.
+
+Bootstrap details: `docs/REPOSITORY_BOOTSTRAP_GUIDE.md`.
+
+Automation note: `registries/*.tsv` are committed seed templates; runtime automation state is written under `artifacts/automation_state/` by default.
