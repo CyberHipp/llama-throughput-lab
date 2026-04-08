@@ -20,7 +20,13 @@
     "artifacts_dir": "artifacts/nexus",
     "retry_attempts": 2,
     "retry_backoff_s": 0.5,
-    "stage_timeout_s": 120
+    "stage_timeout_s": 120,
+    "reasoner_adapter": {
+      "enabled": false,
+      "base_url": "http://127.0.0.1:11434",
+      "model": "nemotron-cascade-2-30b",
+      "timeout_s": 20
+    }
   },
   "router_rules": [
     {"task": "router", "preferred_model": "nemotron-4b-local", "fallback_models": ["nemotron-3-nano-30b"]},

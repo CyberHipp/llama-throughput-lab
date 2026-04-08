@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "bridge_version": "nexus-cockpit-bridge-v1",
+  "local_only": true,
+  "allowed_actions": [
+    "generate_turn_packet",
+    "load_preset",
+    "preview",
+    "show_recent_artifacts"
+  ],
+  "endpoints": [
+    "/healthz",
+    "/capabilities",
+    "/snapshot",
+    "/action",
+    "/receipts",
+    "/receipts/<name>"
+  ],
+  "contract_versions": {
+    "snapshot": "nexus_cockpit_snapshot_v1",
+    "action_result": "nexus_cockpit_action_result_v1",
+    "capabilities": "nexus_cockpit_capabilities_v1"
+  }
+}

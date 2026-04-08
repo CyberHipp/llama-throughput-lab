@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -81,6 +82,60 @@ def _make_reasoned_answer(query: str, evidence: list[EvidenceDocument]) -> tuple
     return answer, confidence
 
 
+class ReasonerAdapterError(RuntimeError):
+    pass
+
+
+def _call_reasoner_adapter(query: str, evidence: list[EvidenceDocument], config: NexusConfig) -> tuple[str, dict[str, object]]:
+    adapter = config.runtime.reasoner_adapter
+    payload = {
+        "model": adapter.model,
+        "messages": [
+            {"role": "system", "content": "You are a concise evidence-grounded reasoner."},
+            {
+                "role": "user",
+                "content": (
+                    f"Query: {query}\n"
+                    f"Evidence count: {len(evidence)}\n"
+                    "Provide a concise grounded answer and include citation URLs from evidence when available."
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    }
+    request = urllib.request.Request(
+        url=f"{adapter.base_url}/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=adapter.timeout_s) as response:
+            if response.status != 200:
+                raise ReasonerAdapterError(f"reason_stage_http_status:{response.status}")
+            body = json.loads(response.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise ReasonerAdapterError("reason_stage_timeout") from exc
+    except urllib.error.URLError as exc:
+        raise ReasonerAdapterError(f"reason_stage_connection_error:{exc.reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise ReasonerAdapterError("reason_stage_malformed_json") from exc
+
+    try:
+        content = str(body["choices"][0]["message"]["content"]).strip()
+        if not content:
+            raise ValueError("empty_content")
+    except Exception as exc:
+        raise ReasonerAdapterError("reason_stage_malformed_response") from exc
+    return content, {
+        "adapter_used": True,
+        "adapter_model": adapter.model,
+        "adapter_base_url": adapter.base_url,
+        "timeout_s": adapter.timeout_s,
+        "adapter_status": "success",
+    }
+
+
 def run_research_pipeline(query: str, config: NexusConfig) -> PipelineResult:
     run_id = f"{config.pipeline.run_id_prefix}-{uuid.uuid4().hex[:8]}"
     trace = build_trace_context(run_id)
@@ -127,13 +182,33 @@ def run_research_pipeline(query: str, config: NexusConfig) -> PipelineResult:
             )
         )
 
-    answer, confidence = _make_reasoned_answer(query, docs)
+    reason_details: dict[str, object] = {"model": select_model("reason", config).name, "evidence_count": len(docs), "adapter_used": False}
+    if config.pipeline.dry_run or not config.runtime.reasoner_adapter.enabled:
+        answer, confidence = _make_reasoned_answer(query, docs)
+    else:
+        try:
+            answer, adapter_meta = _call_reasoner_adapter(query, docs, config)
+            confidence = "medium"
+            reason_details.update(adapter_meta)
+        except ReasonerAdapterError as exc:
+            reason_details.update(
+                {
+                    "adapter_used": True,
+                    "adapter_model": config.runtime.reasoner_adapter.model,
+                    "adapter_base_url": config.runtime.reasoner_adapter.base_url,
+                    "timeout_s": config.runtime.reasoner_adapter.timeout_s,
+                    "adapter_status": "fail",
+                    "reason": str(exc),
+                }
+            )
+            receipts.append(StageReceipt(stage=StageName.REASON, status="fail", details=reason_details))
+            raise
     receipts.extend(
         [
             StageReceipt(
                 stage=StageName.REASON,
                 status="pass",
-                details={"model": select_model("reason", config).name, "evidence_count": len(docs)},
+                details=reason_details,
             ),
             StageReceipt(
                 stage=StageName.CRITIQUE,
