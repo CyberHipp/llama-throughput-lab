@@ -129,6 +129,8 @@ Cockpit v2 also exposes a machine-readable action bridge via `--action-json` / `
 Versioned Cockpit contracts and receipt history are documented in `docs/nexus_cockpit_contract.md`.
 Use `scripts/validate_nexus_cockpit_contract.py` to validate snapshot/action/result/receipt artifacts against versioned cockpit schemas.
 Run `python3 scripts/run_nexus_cockpit_contract_smoke.py` to generate a validated cockpit contract evidence bundle.
+Run `python3 scripts/run_nexus_cockpit_bridge_smoke.py` to generate a validated local HTTP bridge evidence bundle.
+Bridge endpoint posture and usage are documented in `docs/nexus_cockpit_bridge.md`.
 
 Additional operator docs:
 - `docs/nexus_gauntlet_presets.md`

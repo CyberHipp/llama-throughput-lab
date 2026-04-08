@@ -20,3 +20,5 @@ python scripts/validate_nexus_cockpit_contract.py --kind result --json-file test
 ```
 
 See also: `docs/nexus_cockpit_contract_smoke.md` for end-to-end evidence bundle generation.
+
+For bridge-level end-to-end validation, run `python3 scripts/run_nexus_cockpit_bridge_smoke.py` and see `docs/nexus_cockpit_bridge.md`.

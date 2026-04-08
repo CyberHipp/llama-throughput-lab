@@ -4,11 +4,16 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import sys
 from contextlib import redirect_stdout
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import run_nexus_tui
 
